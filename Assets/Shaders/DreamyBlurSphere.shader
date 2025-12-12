@@ -1,164 +1,283 @@
-Shader "Custom/DreamySphereURP"
+Shader "Custom/DreamSphereURP_Dreamy"
 {
     Properties
     {
-        [Header(Main Settings)]
-        [MainTexture] _MainTex ("Main Image", 2D) = "white" {}
-        _Color ("Tint Color", Color) = (1,1,1,1)
+        [Header(Dream Image)]
+        [MainTexture] _DreamTex ("Dream Image", 2D) = "white" {}
+        _Tint ("Tint", Color) = (1,1,1,1)
 
-        [Header(Dreamy Clouds)]
-        _CloudTex ("Cloud/Noise Texture", 2D) = "black" {}
-        _CloudColor ("Cloud Color", Color) = (1, 1, 1, 0.5)
-        _CloudSpeed ("Cloud Scroll Speed", Vector) = (0.1, 0.05, 0, 0)
-        _CloudScale ("Cloud Tiling", Float) = 1.0
+        [Header(Dream Fog Noise)]
+        _NoiseTex ("Noise Texture", 2D) = "gray" {}
+        _FogColor ("Fog Color", Color) = (1, 1, 1, 0.35)
+        _NoiseScale ("Noise Tiling", Range(0.2, 6)) = 1.5
+        _NoiseSpeed ("Noise Speed", Vector) = (0.05, 0.03, 0, 0)
+        _Distort ("UV Distortion", Range(0, 0.05)) = 0.015
 
-        [Header(Physical Waves)]
-        _WaveAmplitude ("Wave Height", Range(0, 0.2)) = 0.05
-        _WaveFrequency ("Wave Frequency", Range(0, 10)) = 2.0
-        _WaveSpeed ("Wave Speed", Range(0, 5)) = 1.0
+        [Header(Blur Control)]
+        _Blur ("Blur Amount", Range(0, 1)) = 0.0
+        _BlurRadius ("Max Blur Radius", Range(0.0, 0.40)) = 0.16
+        _Samples ("Blur Samples", Range(6, 24)) = 16
 
-        [Header(Blur Effect)]
-        _BlurAmount ("Blur Radius", Range(0, 0.05)) = 0.01
-        _Samples ("Blur Quality (Int)", Range(4, 20)) = 10
+        [Header(Soft Glow Rim)]
+        _RimColor ("Rim Color", Color) = (0.75, 0.9, 1.0, 1.0)
+        _RimPower ("Rim Power", Range(0.8, 8.0)) = 2.2
+        _RimIntensity ("Rim Intensity", Range(0, 2)) = 0.8
 
-        [Header(Rim Light)]
-        _RimColor ("Rim Color", Color) = (0.0, 0.8, 1.0, 1.0)
-        _RimPower ("Rim Power", Range(0.5, 8.0)) = 3.0
+        [Header(Subtle Waves)]
+        _WaveAmp ("Wave Amplitude", Range(0, 0.15)) = 0.03
+        _WaveFreq ("Wave Frequency", Range(0, 8)) = 1.7
+        _WaveSpeed ("Wave Speed", Range(0, 4)) = 1.0
+
+        [Header(Glitch Controls)]
+        _Glitch ("Glitch Amount", Range(0, 1)) = 0.0
+        _GlitchSpeed ("Glitch Speed", Range(0, 30)) = 12
+        _GlitchBlockSize ("Glitch Block Size", Range(4, 120)) = 40
+        _RGBShift ("RGB Shift", Range(0, 0.02)) = 0.006
     }
+
     SubShader
     {
-        // URP Etiketleri
-        Tags { "RenderType"="Opaque" "Queue"="Transparent" "RenderPipeline" = "UniversalPipeline" }
+        Tags
+        {
+            "RenderPipeline"="UniversalPipeline"
+            "Queue"="Transparent"
+            "RenderType"="Transparent"
+        }
+
         LOD 100
-        
-        // Yumusak gecis icin blending
-        Blend SrcAlpha OneMinusSrcAlpha 
+        Blend SrcAlpha OneMinusSrcAlpha
+        Cull Back
+        ZWrite Off
 
         Pass
         {
-            Name "DreamyPass"
-            
+            Name "DreamSpherePass"
+
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            
-            // URP Core Kütüphanesi
+
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             struct Attributes
             {
                 float4 positionOS : POSITION;
-                float2 uv : TEXCOORD0;
-                float3 normalOS : NORMAL;
+                float3 normalOS   : NORMAL;
+                float2 uv         : TEXCOORD0;
             };
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                float2 uv : TEXCOORD0;
-                float2 uv_cloud : TEXCOORD1;
-                float3 normalWS : TEXCOORD3;
-                float3 viewDirWS : TEXCOORD4;
+                float3 normalWS   : TEXCOORD0;
+                float3 viewDirWS  : TEXCOORD1;
+                float2 uv         : TEXCOORD2;
+                float3 posWS      : TEXCOORD3;
             };
 
-            // Texture Tanımları (URP stili)
-            TEXTURE2D(_MainTex);
-            SAMPLER(sampler_MainTex);
-            
-            TEXTURE2D(_CloudTex);
-            SAMPLER(sampler_CloudTex);
+            TEXTURE2D(_DreamTex);
+            SAMPLER(sampler_DreamTex);
 
-            // Değişkenler (CBUFFER içinde olmalı - Batching için)
+            TEXTURE2D(_NoiseTex);
+            SAMPLER(sampler_NoiseTex);
+
             CBUFFER_START(UnityPerMaterial)
-                float4 _MainTex_ST;
-                float4 _CloudTex_ST;
-                float4 _Color;
-                float4 _CloudColor;
-                float2 _CloudSpeed;
-                float _CloudScale;
-                float _WaveAmplitude;
-                float _WaveFrequency;
-                float _WaveSpeed;
-                float _BlurAmount;
+                float4 _DreamTex_ST;
+                float4 _Tint;
+
+                float4 _FogColor;
+                float _NoiseScale;
+                float2 _NoiseSpeed;
+                float _Distort;
+
+                float _Blur;
+                float _BlurRadius;
                 int _Samples;
+
                 float4 _RimColor;
                 float _RimPower;
+                float _RimIntensity;
+
+                float _WaveAmp;
+                float _WaveFreq;
+                float _WaveSpeed;
+
+                float _Glitch;
+                float _GlitchSpeed;
+                float _GlitchBlockSize;
+                float _RGBShift;
             CBUFFER_END
 
-            Varyings vert(Attributes input)
+            // ---------- helpers ----------
+            float hash11(float p)
             {
-                Varyings output;
-
-                // --- 1. VERTEX WAVES (URP) ---
-                // Object Space pozisyonunu al
-                float3 pos = input.positionOS.xyz;
-                
-                // Dalgalanma matematigi
-                float wave = sin(pos.x * _WaveFrequency + _Time.y * _WaveSpeed) 
-                           + cos(pos.z * _WaveFrequency * 0.5 + _Time.y * _WaveSpeed);
-                
-                // Normal yönünde şişirme
-                pos += input.normalOS * wave * _WaveAmplitude;
-
-                // URP Dönüşümleri
-                // Object Space -> World Space -> Clip Space
-                VertexPositionInputs vertexInput = GetVertexPositionInputs(pos);
-                output.positionCS = vertexInput.positionCS;
-
-                // UV Hesaplama
-                output.uv = TRANSFORM_TEX(input.uv, _MainTex);
-                output.uv_cloud = input.uv * _CloudScale; 
-
-                // Normal ve View Direction Hesaplama (Rim Light icin)
-                // Normali World Space'e cevir
-                output.normalWS = TransformObjectToWorldNormal(input.normalOS);
-                
-                // View Direction (Kameradan objeye bakis)
-                // URP'de GetWorldSpaceViewDir fonksiyonu pozisyon kullanir
-                output.viewDirWS = GetWorldSpaceViewDir(vertexInput.positionWS);
-
-                return output;
+                p = frac(p * 0.1031);
+                p *= p + 33.33;
+                p *= p + p;
+                return frac(p);
             }
 
-            half4 frag(Varyings input) : SV_Target
+            float hash12(float2 p)
             {
-                // --- 2. BLUR MEKANIZMASI ---
-                half4 mainCol = 0;
-                float totalWeight = 0;
+                float3 p3 = frac(float3(p.xyx) * 0.1031);
+                p3 += dot(p3, p3.yzx + 33.33);
+                return frac((p3.x + p3.y) * p3.z);
+            }
 
-                // URP'de loop icin [unroll] gerekebilir ama basit dongu de calisir
-                for (int j = 0; j < _Samples; j++)
+            float2 hash22(float2 p)
+            {
+                float n = hash12(p);
+                return float2(n, hash12(p + n + 19.19));
+            }
+
+            float EaseBlur(float x)
+            {
+                // 0 -> 0, 1 -> 1 (ama 1'e yaklaşınca daha agresif)
+                return pow(saturate(x), 3.0);
+            }
+
+            Varyings vert(Attributes IN)
+            {
+                Varyings OUT;
+
+                float3 pos = IN.positionOS.xyz;
+
+                // Dreamy nefes dalgası (hafif)
+                float t = _Time.y * _WaveSpeed;
+                float f = max(0.0001, _WaveFreq);
+
+                float wave =
+                    sin(pos.x * f + t) * 0.55 +
+                    cos(pos.z * f * 0.7 + t * 1.1) * 0.35 +
+                    sin((pos.x + pos.z) * f * 0.35 + t * 0.85) * 0.25;
+
+                pos += IN.normalOS * wave * _WaveAmp;
+
+                VertexPositionInputs vp = GetVertexPositionInputs(pos);
+                OUT.positionCS = vp.positionCS;
+                OUT.posWS = vp.positionWS;
+
+                OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
+                OUT.viewDirWS = GetWorldSpaceViewDir(vp.positionWS);
+                OUT.uv = TRANSFORM_TEX(IN.uv, _DreamTex);
+
+                return OUT;
+            }
+
+            half4 frag(Varyings IN) : SV_Target
+            {
+                float2 uv = IN.uv;
+
+                // ---------- GLITCH (titreme + cızırtı blokları) ----------
+                float g = saturate(_Glitch);
+                if (g > 0.0001)
                 {
-                    float offset = (float)j / (float)_Samples;
-                    float angle = j * 10.0 + _Time.y * 0.5; // Dönen blur
-                    float2 blurOffset = float2(cos(angle), sin(angle)) * _BlurAmount * offset;
-                    
-                    // URP Texture Örnekleme: SAMPLE_TEXTURE2D(Texture, Sampler, UV)
-                    mainCol += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv + blurOffset);
-                    totalWeight += 1.0;
+                    // blok koordinatı
+                    float2 blockUV = floor(uv * _GlitchBlockSize);
+                    float timeStep = floor(_Time.y * _GlitchSpeed);
+
+                    float rnd = hash12(blockUV + timeStep);
+                    float2 jitter = (hash22(blockUV + timeStep * 1.37) * 2.0 - 1.0);
+
+                    // yatay “scanline” kaydırma hissi (cızırtı)
+                    float scan = sin((uv.y + rnd) * 900.0 + _Time.y * 40.0) * 0.5 + 0.5;
+                    float scanMask = smoothstep(0.85, 1.0, scan) * g;
+
+                    // blok bazlı UV kaydırma + küçük titreme
+                    float2 blockShift = float2((rnd - 0.5) * 0.03, 0.0) * g;
+                    float2 microJitter = jitter * 0.0035 * g;
+
+                    uv += blockShift + microJitter * (0.35 + 0.65 * scanMask);
                 }
-                mainCol /= totalWeight;
-                mainCol *= _Color;
 
-                // --- 3. CLOUD LAYER ---
-                float2 cloudUV = input.uv_cloud + (_Time.y * _CloudSpeed);
-                half4 cloudTex = SAMPLE_TEXTURE2D(_CloudTex, sampler_CloudTex, cloudUV);
-                
-                half4 cloudLayer = cloudTex * _CloudColor;
-                half4 finalCol = lerp(mainCol, cloudLayer, cloudLayer.a * 0.5);
+                // ---------- NOISE (fog + distortion) ----------
+                float2 noiseUV = uv * _NoiseScale + _Time.y * _NoiseSpeed;
+                half4 noise = SAMPLE_TEXTURE2D(_NoiseTex, sampler_NoiseTex, noiseUV);
 
-                // --- 4. RIM LIGHT (FRESNEL) ---
-                // Normalleri normalize et
-                float3 N = normalize(input.normalWS);
-                float3 V = normalize(input.viewDirWS);
-                
-                // Dot product (Nokta carpimi)
-                float NdotV = saturate(dot(N, V));
-                float rim = pow(1.0 - NdotV, _RimPower);
-                
-                finalCol.rgb += _RimColor.rgb * rim;
+                float noiseLuma = dot(noise.rgb, half3(0.299h, 0.587h, 0.114h));
 
-                return finalCol;
+                // Distortion blur ile beraber artar (rüya kayması)
+                float b = EaseBlur(_Blur);
+                float2 distortVec = (noise.rg * 2.0 - 1.0) * _Distort * (0.35 + 0.65 * noiseLuma);
+                uv += distortVec * (0.25 + 0.85 * b);
+
+                // ---------- EXTREME BLUR (siyahlamadan maksimum blur) ----------
+                int samples = max(6, _Samples);
+                float inv = 1.0 / (float)samples;
+
+                // blurRadius: 0->0, 1-> çok büyük (okunmaz)
+                // ekstra çarpan: max blur'da gerçekten dağılsın
+                float blurRadius = _BlurRadius * b * (1.0 + 5.0 * b);
+
+                half4 accum = 0;
+                float wsum = 0;
+
+                // blur pattern’i her frame çok az değişsin (dream shimmer)
+                float seed = hash11(floor(_Time.y * 12.0)) * 6.2831853;
+
+                // Spiral + gaussian ağırlık
+                for (int i = 0; i < 64; i++)
+                {
+                    if (i >= samples) break;
+
+                    float u = (i + 0.5) * inv;  // 0..1
+                    float r = u * u;            // merkez daha yoğun
+                    float ang = (i * 2.39996323) + seed; // golden-angle spiral
+
+                    float2 dir = float2(cos(ang), sin(ang));
+
+                    // r dağılımı + hafif jitter (max blur’da “okunmazlık” artar)
+                    float jitterAmt = (0.15 + 0.85 * b) * 0.12;
+                    float2 j2 = (hash22(float2(i, seed)) * 2.0 - 1.0) * jitterAmt;
+
+                    float2 offs = (dir + j2) * blurRadius * (r * 2.9);
+
+                    // ağırlık: merkez ağırlıklı ama max blur’da dış örnekler de daha etkili
+                    float w = exp(-r * 3.0);
+                    w = lerp(w, 1.0, b * 0.35); // max blur’da daha “flat” -> daha fazla smear
+
+                    accum += SAMPLE_TEXTURE2D(_DreamTex, sampler_DreamTex, uv + offs) * (half)w;
+                    wsum += w;
+                }
+
+                half4 dream = accum / max(1e-5, wsum);
+                dream *= _Tint;
+
+                // ---------- RGB SHIFT (glitch için renk kayması) ----------
+                if (g > 0.0001)
+                {
+                    float shift = _RGBShift * g;
+                    half rC = SAMPLE_TEXTURE2D(_DreamTex, sampler_DreamTex, uv + float2( shift, 0)).r;
+                    half gC = SAMPLE_TEXTURE2D(_DreamTex, sampler_DreamTex, uv + float2(-shift, 0)).g;
+                    half bC = SAMPLE_TEXTURE2D(_DreamTex, sampler_DreamTex, uv + float2(0, shift)).b;
+
+                    // Çok hafif uygula (cozy kalsın)
+                    dream.rgb = lerp(dream.rgb, half3(rC, gC, bC), 0.35h * (half)g);
+                }
+
+                // ---------- FOG MIX (rüya sisi) ----------
+                float fogMask = saturate(_FogColor.a * (0.55 + 0.75 * noiseLuma));
+                fogMask *= (0.20 + 1.10 * b);      // blur arttıkça sis artsın
+                fogMask *= (1.0 + 0.35 * g);       // glitch varsa biraz “toz” gibi artsın
+
+                half3 fogAdd = noise.rgb * _FogColor.rgb * (0.35h + (half)noiseLuma * 0.75h);
+                half3 rgb = dream.rgb + fogAdd * (half)fogMask;
+
+                // cozy: highlight compress (siyah basmadan yumuşatır)
+                rgb = rgb / (1.0h + rgb * 0.45h);
+
+                // ---------- RIM GLOW ----------
+                float3 N = normalize(IN.normalWS);
+                float3 V = normalize(IN.viewDirWS);
+
+                float rim = pow(1.0 - saturate(dot(N, V)), _RimPower);
+                rim = smoothstep(0.05, 1.0, rim);
+
+                float rimBoost = lerp(1.0, 1.35, b) * lerp(1.0, 1.20, g);
+                rgb += _RimColor.rgb * rim * _RimIntensity * rimBoost * _RimColor.a;
+
+                // Alpha: siyahlamasın diye alpha’yı sabit tutuyoruz (istersen blur’a bağlı düşürürüz)
+                return half4(rgb, 1.0);
             }
             ENDHLSL
         }
