@@ -54,6 +54,10 @@ public class ButtonManager : MonoBehaviour
     [Tooltip("Buton basıldığında gösterilecek mesaj (Inspector'dan özelleştirilebilir, boşsa otomatik ayarlanır)")]
     public string feedbackMessage = "";
     
+    [Header("3D UI Feedback")]
+    [Tooltip("3D UI Feedback Manager (otomatik bulunur veya manuel atanabilir)")]
+    public UIFeedbackManager uiFeedbackManager;
+    
     // Özel değişkenler
     private Vector3 originalButtonPosition;
     private Color originalTargetColor;
@@ -94,6 +98,12 @@ public class ButtonManager : MonoBehaviour
         if (GetComponent<Collider>() == null)
         {
             Debug.LogWarning("ButtonManager: OnMouseDown çalışması için bu GameObject'te bir Collider bileşeni olmalı!");
+        }
+        
+        // UIFeedbackManager'ı otomatik bul (eğer atanmamışsa)
+        if (uiFeedbackManager == null)
+        {
+            uiFeedbackManager = FindObjectOfType<UIFeedbackManager>();
         }
         
         // Basma hakkını başlat
@@ -165,8 +175,11 @@ public class ButtonManager : MonoBehaviour
             // DreamLogicController'a durumu bildir
             NotifyDreamLogicController();
             
-            // UI Feedback göster
+            // UI Feedback göster (2D UI)
             ShowFeedback();
+            
+            // 3D UI Feedback göster (damage number gibi)
+            Show3DFeedback();
             
             // DreamLogicController'a buton basıldığını bildir (oyun kontrolü için)
             if (dreamLogicController != null)
@@ -315,7 +328,7 @@ public class ButtonManager : MonoBehaviour
     }
     
     /// <summary>
-    /// UI Feedback göster
+    /// UI Feedback göster (2D UI)
     /// </summary>
     private void ShowFeedback()
     {
@@ -336,6 +349,23 @@ public class ButtonManager : MonoBehaviour
             
             // 2 saniye sonra gizle
             StartCoroutine(HideFeedbackAfterDelay(2f, true));
+        }
+    }
+    
+    /// <summary>
+    /// 3D UI Feedback göster (damage number gibi - yukarı süzülüp kaybolur)
+    /// </summary>
+    private void Show3DFeedback()
+    {
+        if (uiFeedbackManager != null)
+        {
+            // Butonun pozisyonunu kullan (buttonMesh varsa onu, yoksa transform'u)
+            Vector3 spawnPosition = buttonMesh != null ? buttonMesh.position : transform.position;
+            
+            // Butonun üstünde bir offset ile göster
+            spawnPosition += Vector3.up * 0.5f; // Butonun 0.5 birim üstünde
+            
+            uiFeedbackManager.ShowFeedback(buttonType, spawnPosition);
         }
     }
     
