@@ -231,16 +231,29 @@ Shader "Custom/DreamSphereURP_Dreamy"
                     float2 j2 = (hash22(float2(i, seed)) * 2.0 - 1.0) * jitterAmt;
 
                     float2 offs = (dir + j2) * blurRadius * (r * 2.9);
+                    float2 sampleUV = uv + offs;
+                    
+                    // UV'leri clamp et (0..1) - siyahlaşmayı önler
+                    // Out-of-range sample'lar center sample'a fallback eder
+                    float2 originalUV = sampleUV;
+                    sampleUV = saturate(sampleUV);
+                    
+                    // Eğer clamp işlemi UV'yi değiştirdiyse (out-of-range), center sample kullan
+                    float2 diff = abs(originalUV - sampleUV);
+                    float isOutOfRange = step(0.0001, max(diff.x, diff.y)); // 1 = out of range
+                    sampleUV = lerp(sampleUV, uv, isOutOfRange);
 
-                    // ağırlık: merkez ağırlıklı ama max blur’da dış örnekler de daha etkili
+                    // ağırlık: merkez ağırlıklı ama max blur'da dış örnekler de daha etkili
                     float w = exp(-r * 3.0);
-                    w = lerp(w, 1.0, b * 0.35); // max blur’da daha “flat” -> daha fazla smear
+                    w = lerp(w, 1.0, b * 0.35); // max blur'da daha "flat" -> daha fazla smear
 
-                    accum += SAMPLE_TEXTURE2D(_DreamTex, sampler_DreamTex, uv + offs) * (half)w;
+                    accum += SAMPLE_TEXTURE2D(_DreamTex, sampler_DreamTex, sampleUV) * (half)w;
                     wsum += w;
                 }
 
-                half4 dream = accum / max(1e-5, wsum);
+                // Blur weight'lerini normalize et (siyahlaşmayı önler)
+                wsum = max(1e-5, wsum);
+                half4 dream = accum / (half)wsum;
                 dream *= _Tint;
 
                 // ---------- RGB SHIFT (glitch için renk kayması) ----------

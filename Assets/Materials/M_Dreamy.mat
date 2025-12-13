@@ -42,14 +42,14 @@ Material:
     m_Ints: []
     m_Floats:
     - _Blur: 0.28
-    - _BlurAmount: 0.05
+    - _BlurAmount: 0.8
     - _BlurRadius: 0.128
     - _BreathAmount: 0.0125
     - _BreathSpeed: 2
     - _CloudScale: 1
     - _Distort: 0.015
     - _Distortion: 0.02
-    - _Glitch: 0.106
+    - _Glitch: 0
     - _GlitchBlockSize: 120
     - _GlitchSpeed: 0
     - _NoiseScale: 0.2
