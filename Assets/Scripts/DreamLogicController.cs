@@ -39,9 +39,9 @@ public class DreamLogicController : MonoBehaviour
     public float smoothTime = 0.3f;
     
     [Header("Oyun Durumu")]
-    [Tooltip("Kazanma için shrink değeri (beyin max büyüklükte - 0.05 veya daha küçük)")]
+    [Tooltip("Kazanma için shrink değeri (beyin büyüklüğü - 0.190 veya daha küçük)")]
     [Range(0f, 1f)]
-    public float winShrinkThreshold = 0.05f; // Beyin max büyüklükte (shrink çok düşük)
+    public float winShrinkThreshold = 0.190f; // Beyin yeterince büyük (shrink <= 0.190)
     
     [Tooltip("Beyin max değilse blur/glitch minimum değeri (rüya asla %100 net olmaz)")]
     [Range(0f, 1f)]
@@ -62,6 +62,10 @@ public class DreamLogicController : MonoBehaviour
     
     [Tooltip("Kazanma durumunda gösterilecek süre (saniye)")]
     public float winDisplayDuration = 5f;
+    
+    [Header("Win/Lose Screen Manager")]
+    [Tooltip("Win/Lose Screen Manager (Tools > Create Win/Lose Screen ile oluşturulabilir)")]
+    public WinLoseScreenManager winLoseScreenManager;
 
     [Header("Latent Brain States (0..1)")]
     [Tooltip("Arousal (Uyarılma) - Otomatik hesaplanır")]
@@ -104,10 +108,10 @@ public class DreamLogicController : MonoBehaviour
     private float smoothShrinkAmountVel = 0f;
     
     // Mevcut shrink değeri (smooth geçiş için)
-    private float currentShrinkAmount = 0.379f; // Material'daki başlangıç değeri (M_BrainShrivel.mat: _ShrinkAmount = 0.379)
+    private float currentShrinkAmount = 0.900f; // Başlangıç değeri: 0.900 (küçük beyin - görsel olarak küçük başlar)
     
     // Material'dan okunan başlangıç değerleri
-    private float initialShrinkAmount = 0.379f; // Material'dan okunacak
+    private float initialShrinkAmount = 0.900f; // Başlangıç değeri: 0.900 (küçük beyin - görsel olarak küçük başlar)
     private float initialShrinkScale = 0.0256f; // Material'dan okunacak (_ShrinkScale)
     private float initialMinObjectScale = 0.6f; // Material'dan okunacak (_MinObjectScale)
     
@@ -163,6 +167,13 @@ public class DreamLogicController : MonoBehaviour
 
     void Start()
     {
+        // winShrinkThreshold değerini garanti et (Inspector'da yanlış ayarlanmış olabilir)
+        if (winShrinkThreshold <= 0f || winShrinkThreshold > 1f)
+        {
+            winShrinkThreshold = 0.190f; // Varsayılan değer
+            Debug.LogWarning($"DreamLogicController: winShrinkThreshold geçersiz değer, 0.190'a ayarlandı.");
+        }
+        
         InitializeMaterials();
         InitializePropertyIDs();
         
@@ -175,22 +186,34 @@ public class DreamLogicController : MonoBehaviour
             allButtons = FindObjectsOfType<ButtonManager>();
         }
         
+        // WinLoseScreenManager'ı otomatik bul (eğer atanmamışsa)
+        if (winLoseScreenManager == null)
+        {
+            winLoseScreenManager = FindObjectOfType<WinLoseScreenManager>();
+        }
+        
         // Oyunu başlat
         StartNewGame();
     }
     
     /// <summary>
     /// Material'dan başlangıç değerlerini oku
+    /// NOT: ShrinkAmount başlangıç değeri 0.900 olarak sabitlenmiştir (oyun mekaniği için)
     /// </summary>
     private void ReadInitialValuesFromMaterial()
     {
         if (brainMat != null)
         {
-            // ShrinkAmount'u oku
+            // ShrinkAmount'u oku (ama başlangıç değeri 0.900 olarak sabitlenmiştir)
             if (brainMat.HasProperty(shrinkProgressID))
             {
-                initialShrinkAmount = brainMat.GetFloat(shrinkProgressID);
+                // Material'dan oku ama başlangıç değeri 0.900 olarak sabit (oyun mekaniği için)
+                // initialShrinkAmount = brainMat.GetFloat(shrinkProgressID); // Material değerini kullanma
+                initialShrinkAmount = 0.900f; // Sabit başlangıç değeri (küçük beyin - görsel olarak küçük başlar)
                 currentShrinkAmount = initialShrinkAmount;
+                
+                // Material'daki değeri de 0.900'e ayarla (görsel tutarlılık için)
+                brainMat.SetFloat(shrinkProgressID, 0.900f);
             }
             
             // ShrinkScale'i oku
@@ -205,7 +228,8 @@ public class DreamLogicController : MonoBehaviour
                 initialMinObjectScale = brainMat.GetFloat(minMeshScaleID);
             }
             
-            Debug.Log($"Material değerleri okundu: ShrinkAmount={initialShrinkAmount:F3}, ShrinkScale={initialShrinkScale:F4}, MinObjectScale={initialMinObjectScale:F2}");
+            Debug.Log($"Material değerleri okundu: ShrinkAmount={initialShrinkAmount:F3} (başlangıç - küçük beyin), ShrinkScale={initialShrinkScale:F4}, MinObjectScale={initialMinObjectScale:F2}");
+            Debug.Log($"Shrink Mantığı: YÜKSEK değer (0.900) = KÜÇÜK beyin, DÜŞÜK değer (0.350 altı) = BÜYÜK beyin");
         }
     }
     
@@ -216,6 +240,12 @@ public class DreamLogicController : MonoBehaviour
     {
         gameEnded = false;
         gameWon = false;
+        
+        // Win/Lose ekranlarını gizle
+        if (winLoseScreenManager != null)
+        {
+            winLoseScreenManager.HideAllScreens();
+        }
         hasAnyButtonBeenPressed = false; // İlk basış kontrolünü sıfırla
         
         // Tüm butonları sıfırla
@@ -262,9 +292,9 @@ public class DreamLogicController : MonoBehaviour
         // Material property'lerini material'daki başlangıç değerlerine ayarla
         if (brainRenderer != null && brainPropertyBlock != null && brainMat != null)
         {
-            // Material'daki başlangıç shrink değerini kullan
+            // Material'daki başlangıç shrink değerini kullan (0.900 - küçük beyin)
             if (brainMat.HasProperty(shrinkProgressID))
-                brainPropertyBlock.SetFloat(shrinkProgressID, initialShrinkAmount);
+                brainPropertyBlock.SetFloat(shrinkProgressID, initialShrinkAmount); // 0.900
             
             // Material'daki başlangıç shrink scale ve min mesh scale değerlerini kullan
             if (brainMat.HasProperty(maxShrinkDepthID))
@@ -491,37 +521,52 @@ public class DreamLogicController : MonoBehaviour
     {
         gameEnded = true;
         
+        // winShrinkThreshold değerini garanti et (güvenlik kontrolü - Inspector'da yanlış ayarlanmış olabilir)
+        const float WIN_THRESHOLD = 0.190f; // Sabit değer - her zaman 0.190
+        if (winShrinkThreshold <= 0f || winShrinkThreshold > 1f)
+        {
+            winShrinkThreshold = WIN_THRESHOLD;
+            Debug.LogWarning($"EndGame: winShrinkThreshold geçersiz ({winShrinkThreshold}), {WIN_THRESHOLD}'e ayarlandı.");
+        }
+        
+        // Kazanma kontrolü için sabit threshold kullan (Inspector değerinden bağımsız)
+        float actualThreshold = WIN_THRESHOLD;
+        
         // DEBUG: Beyin büyüklüğü ve rüya netliği bilgilerini göster
         Debug.Log($"=== OYUN BİTTİ ===");
-        Debug.Log($"Beyin Büyüklüğü (Shrink): {currentShrinkAmount:F3} (Max: < {winShrinkThreshold}, Min: 1.0)");
-        Debug.Log($"Rüya Netliği (Blur): {currentBlurAmount:F3} (Hedef: 0.0 = %100 net)");
-        Debug.Log($"Rüya Kalitesi (Glitch): {currentGlitchAmount:F3} (Hedef: 0.0 = %100 net)");
+        Debug.Log($"Beyin Büyüklüğü (Shrink): {currentShrinkAmount:F3}");
+        Debug.Log($"Kazanma Threshold: {actualThreshold:F3} (Shrink <= {actualThreshold:F3} ise KAZANMA)");
+        Debug.Log($"Rüya Netliği (Blur): {currentBlurAmount:F3}");
+        Debug.Log($"Rüya Kalitesi (Glitch): {currentGlitchAmount:F3}");
         
-        // Kazanma koşulu: Beyin MAX büyüklükte (shrink çok düşük)
-        // Kullanıcı isteği: Sadece beyin büyüklüğüne bak, max değilse lose
-        bool brainIsMax = currentShrinkAmount <= winShrinkThreshold; // Beyin max büyüklükte
+        // Kazanma koşulu: Shrink değeri 0.190'dan küçük veya eşit olmalı
+        bool brainIsMax = currentShrinkAmount <= actualThreshold;
         
-        // Rüya netliği kontrolü (beyin max ise rüya da net olmalı)
-        bool blurIsClear = currentBlurAmount <= 0.01f; // Blur neredeyse 0 (0.01 tolerans)
-        bool glitchIsClear = currentGlitchAmount <= 0.01f; // Glitch neredeyse 0 (0.01 tolerans)
+        // Debug: Karşılaştırma detayları
+        Debug.Log($"=== KAZANMA KONTROLÜ ===");
+        Debug.Log($"Shrink Değeri: {currentShrinkAmount:F3}");
+        Debug.Log($"Threshold: {actualThreshold:F3}");
+        Debug.Log($"Karşılaştırma: {currentShrinkAmount:F3} <= {actualThreshold:F3} = {brainIsMax}");
         
-        // Kazanma: Beyin MAX büyüklükte (ve rüya net ise - ama öncelik beyin büyüklüğü)
+        // Kazanma: Shrink <= 0.190
         bool hasWon = brainIsMax;
         
         if (hasWon)
         {
-            // KAZANILDI! Beyin max büyüklükte
+            // KAZANILDI! Shrink değeri 0.190'dan küçük veya eşit
             gameWon = true;
-            Debug.Log($"✅ OYUN KAZANILDI! Beyin MAX büyüklükte (Shrink: {currentShrinkAmount:F3} <= {winShrinkThreshold})");
-            Debug.Log($"   Rüya Netliği: Blur={currentBlurAmount:F3}, Glitch={currentGlitchAmount:F3}");
+            Debug.Log($"✅✅✅ OYUN KAZANILDI! ✅✅✅");
+            Debug.Log($"Beyin yeterince büyük: Shrink={currentShrinkAmount:F3} <= Threshold={actualThreshold:F3}");
+            Debug.Log($"Rüya Netliği: Blur={currentBlurAmount:F3}, Glitch={currentGlitchAmount:F3}");
             OnGameWon();
         }
         else
         {
-            // KAYBEDİLDİ! Beyin max değil
+            // KAYBEDİLDİ! Shrink değeri 0.190'dan büyük
             gameWon = false;
-            Debug.Log($"❌ OYUN KAYBEDİLDİ! Beyin max değil (Shrink: {currentShrinkAmount:F3} > {winShrinkThreshold})");
-            Debug.Log($"   Rüya Netliği: Blur={currentBlurAmount:F3}, Glitch={currentGlitchAmount:F3}");
+            Debug.Log($"❌❌❌ OYUN KAYBEDİLDİ! ❌❌❌");
+            Debug.Log($"Beyin yeterince büyük değil: Shrink={currentShrinkAmount:F3} > Threshold={actualThreshold:F3}");
+            Debug.Log($"Rüya Netliği: Blur={currentBlurAmount:F3}, Glitch={currentGlitchAmount:F3}");
             OnGameLost();
         }
     }
@@ -533,14 +578,19 @@ public class DreamLogicController : MonoBehaviour
     {
         Debug.Log("TEBRİKLER! Beyin büyütüldü ve rüya netleştirildi!");
         
-        // Kazanma UI Feedback göster
+        // Win/Lose Screen Manager varsa win ekranını göster
+        if (winLoseScreenManager != null)
+        {
+            winLoseScreenManager.ShowWinScreen();
+        }
+        
+        // Eski UI Feedback göster (geriye dönük uyumluluk için)
         ShowWinFeedback();
         
         // Kazanma durumunda özel bir şey yapılabilir (ses efekti, animasyon vb.)
         // Örnek: Time.timeScale = 0.5f; // Slow motion efekti
         
-        // winDisplayDuration saniye sonra yeni oyun başlat
-        Invoke(nameof(StartNewGame), winDisplayDuration);
+        // NOT: Restart butonu WinLoseScreenManager'da yönetiliyor, burada otomatik restart yapmıyoruz
     }
     
     /// <summary>
@@ -595,11 +645,15 @@ public class DreamLogicController : MonoBehaviour
     /// </summary>
     private void OnGameLost()
     {
-        // Buraya kaybetme UI'ı, ses efekti vb. eklenebilir
         Debug.Log("OYUN BİTTİ! Tekrar deneyin...");
         
-        // 2 saniye sonra yeni oyun başlat
-        Invoke(nameof(StartNewGame), 2f);
+        // Win/Lose Screen Manager varsa lose ekranını göster
+        if (winLoseScreenManager != null)
+        {
+            winLoseScreenManager.ShowLoseScreen();
+        }
+        
+        // NOT: Restart butonu WinLoseScreenManager'da yönetiliyor, burada otomatik restart yapmıyoruz
     }
 
     /// <summary>
@@ -706,21 +760,23 @@ public class DreamLogicController : MonoBehaviour
         targetThermalStress -= 0.20f * lavenderSmell; // Stres azalır
         
         // ISI (Warm Air) kuralları:
-        // - Beyni ortalama seviyede tutar
-        // - Rüya görünümü ortalama kalitede (ne çok iyi ne çok kötü)
-        targetThermalStress += 0.30f * warmAir; // Hafif termal stres (çok agresif değil)
-        targetArousal += 0.15f * warmAir; // Hafif uyarılma
-        targetRelaxation += 0.20f * warmAir; // Hafif rahatlama (uyku kalitesi biraz iyileşir)
-        targetFragmentation -= 0.10f * warmAir; // Hafif parçalanma azaltma
+        // - Beyni küçültür (olumsuz etki)
+        // - Rüya görünümü bozulur (olumsuz etki)
+        // - Yüksek ısı uyku kalitesini bozar, beyin sağlığını olumsuz etkiler
+        targetThermalStress += 0.60f * warmAir; // Yüksek termal stres (olumsuz)
+        targetArousal -= 0.10f * warmAir; // Uyarılma azalır (uyku kalitesi bozulur)
+        targetRelaxation -= 0.40f * warmAir; // Rahatlama azalır (uyku kalitesi bozulur - olumsuz)
+        targetFragmentation += 0.50f * warmAir; // Parçalanma artar (beyin sağlığı bozulur - olumsuz)
         
         // MELATONIN kuralları:
-        // - Tek başına NEREDEYSE HİÇ ETKİSİ YOK (sadece kombinasyonlarda güçlenir)
-        // - Rüya kalitesini çok minimal iyileştirir AMA beyin büyümesini yavaşlatır (derin uyku ama pasif - trade-off)
-        // - Sadece Kafein veya Lavanta ile kombinasyonlarda güçlenir
-        targetRelaxation += 0.12f * melatonin; // Çok minimal rahatlama (tek başına neredeyse yok)
-        targetFragmentation -= 0.08f * melatonin; // Çok minimal parçalanma azaltma (tek başına neredeyse yok)
-        targetArousal -= 0.20f * melatonin; // Uyarılma azalır (derin uyku - beyin büyümesini yavaşlatır - bu negatif etki)
-        targetThermalStress -= 0.05f * melatonin; // Çok minimal stres azaltma
+        // - Beyni büyütür (iyileştirici etki)
+        // - Rüya kalitesini iyileştirir (netlik ve tutarlılık artar)
+        // - Derin uyku sağlar, beyin sağlığını artırır
+        // - Kombinasyonlarda daha da güçlenir
+        targetRelaxation += 0.50f * melatonin; // Yüksek rahatlama (derin uyku)
+        targetFragmentation -= 0.35f * melatonin; // Parçalanma azalır (beyin sağlığı artar)
+        targetArousal -= 0.10f * melatonin; // Uyarılma hafif azalır (derin uyku - ama beyin büyümesini engellemez)
+        targetThermalStress -= 0.25f * melatonin; // Stres azaltma (iyileştirici)
         
         // Clamp to 0..1
         targetArousal = Mathf.Clamp01(targetArousal);
@@ -747,10 +803,10 @@ public class DreamLogicController : MonoBehaviour
         // Clarity (Rüya Netliği): 
         // - Kafein biraz artırır (ama glitch artırır - trade-off)
         // - Lavanta biraz artırır (netlik biraz artar)
-        // - Melatonin çok minimal artırır (tek başına neredeyse yok - sadece kombinasyonlarda güçlenir)
+        // - Melatonin artırır (derin uyku netliği iyileştirir)
         // - Radyasyon azaltır (netliği bozar)
-        // - Isı biraz artırır (uyku kalitesi biraz iyileşir)
-        float targetClarity = 0.30f * Arousal + 0.35f * Relaxation + 0.10f * melatonin - 0.80f * Fragmentation - 0.20f * ThermalStress + 0.15f * warmAir + 0.15f;
+        // - Isı azaltır (yüksek ısı uyku kalitesini bozar, netliği düşürür - olumsuz)
+        float targetClarity = 0.30f * Arousal + 0.35f * Relaxation + 0.30f * melatonin - 0.80f * Fragmentation - 0.20f * ThermalStress - 0.30f * warmAir + 0.15f; // Melatonin netliği artırır
         targetClarity = Mathf.Clamp01(targetClarity);
         
         // Vividness (Canlılık):
@@ -764,9 +820,9 @@ public class DreamLogicController : MonoBehaviour
         // - Kafein artırır (anksiyetik - trade-off: beyin büyütür ama glitch artırır)
         // - Radyasyon artırır (yüksek parçalanma)
         // - Lavanta azaltır (rahatlama)
-        // - Melatonin azaltır (ama tek başına yeterli değil)
+        // - Melatonin azaltır (derin uyku glitch'i azaltır)
         // - Isı orta seviyede
-        float targetChaos = 0.60f * Fragmentation + 0.40f * ThermalStress + 0.60f * Arousal - 0.50f * Relaxation - 0.30f * melatonin;
+        float targetChaos = 0.60f * Fragmentation + 0.40f * ThermalStress + 0.60f * Arousal - 0.50f * Relaxation - 0.50f * melatonin; // Melatonin glitch'i daha fazla azaltır
         targetChaos = Mathf.Clamp01(targetChaos);
         
         // Smooth geçişler
@@ -794,35 +850,34 @@ public class DreamLogicController : MonoBehaviour
         // Kombinasyon bonusu: İkili kombinasyonlar güçlü sinerji yaratır
         combinationBonus = 0f;
         
-        // İkili kombinasyonlar (güçlü sinerji)
-        if (activeButtonCount >= 2)
-        {
-            // Kafein + Lavanta: Optimal sinerji (Flow State) - Kafein'in glitch etkisini Lavanta dengeler
-            if (caffeineSmell > 0.5f && lavenderSmell > 0.5f)
-                combinationBonus += 0.25f; // İyi sinerji (azaltıldı - daha zor)
+            // İkili kombinasyonlar (güçlü sinerji)
+            if (activeButtonCount >= 2)
+            {
+                // Kafein + Lavanta: Optimal sinerji (Flow State) - Kafein'in glitch etkisini Lavanta dengeler
+                if (caffeineSmell > 0.5f && lavenderSmell > 0.5f)
+                    combinationBonus += 0.35f; // İyi sinerji (güçlendirildi)
+                
+                // Kafein + Lavanta + Melatonin: MÜKEMMEL SİNERJİ (Optimal Çözüm)
+                // Bu kombinasyon tüm hedeflere ulaştırır: Shrink 0.350'e kadar, Blur 0, Glitch 0
+                if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f)
+                    combinationBonus += 0.50f; // Güçlü sinerji (güçlendirildi)
+                
+                // Melatonin + Lavanta: Derin uyku + rahatlama (iyi kombinasyon)
+                if (melatonin > 0.5f && lavenderSmell > 0.5f)
+                    combinationBonus += 0.30f; // Orta seviye sinerji (güçlendirildi)
+                
+                // Melatonin + Kafein: İlginç sinerji (uyarı + derin uyku dengesi)
+                // Kafein'in glitch etkisini Melatonin dengeler
+                if (melatonin > 0.5f && caffeineSmell > 0.5f)
+                    combinationBonus += 0.30f; // İyi sinerji (güçlendirildi)
             
-            // Kafein + Lavanta + Melatonin: MÜKEMMEL SİNERJİ (Optimal Çözüm) - Ama çok zor bulunmalı
-            // Bu kombinasyon tüm hedeflere ulaştırır: Shrink 0.375'e kadar, Blur 0, Glitch 0
-            // Ama Melatonin tek başına çok zayıf olduğu için bu kombinasyon da daha zor olmalı
-            if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f)
-                combinationBonus += 0.35f; // Güçlü sinerji (daha da azaltıldı - çok zor kazanma)
-            
-            // Melatonin + Lavanta: Derin uyku + rahatlama (iyi ama yeterli değil)
-            if (melatonin > 0.5f && lavenderSmell > 0.5f)
-                combinationBonus += 0.18f; // Orta seviye sinerji (azaltıldı)
-            
-            // Melatonin + Kafein: İlginç sinerji (uyarı + derin uyku dengesi)
-            // Kafein'in glitch etkisini Melatonin dengeler - Ama bu kombinasyon da çok güçlü olmamalı
-            if (melatonin > 0.5f && caffeineSmell > 0.5f)
-                combinationBonus += 0.20f; // İyi sinerji (azaltıldı - daha zor)
-            
-            // Kafein + Isı: Aktivite artışı
+            // Kafein + Isı: Zararlı kombinasyon (yüksek ısı + uyarılma = stres)
             if (caffeineSmell > 0.5f && warmAir > 0.5f)
-                combinationBonus += 0.20f;
+                combinationBonus -= 0.15f; // Negatif bonus (olumsuz)
             
-            // Lavanta + Isı: Rahatlama + denge
+            // Lavanta + Isı: Lavanta ısının zararını biraz azaltır ama yine de olumsuz
             if (lavenderSmell > 0.5f && warmAir > 0.5f)
-                combinationBonus += 0.25f;
+                combinationBonus -= 0.05f; // Hafif negatif (lavanta koruyucu ama yeterli değil)
             
             // Kafein + Radyasyon: ÇOK ZARARLI (cezalandırıcı kombinasyon)
             // Bu kombinasyon oyunu kaybettirir - yanlış strateji
@@ -840,24 +895,31 @@ public class DreamLogicController : MonoBehaviour
             // Kafein + Lavanta + Melatonin + Radyasyon: Güçlü sinerji (tüm butonlar kullanıldığında)
             // Bu kombinasyon tüm butonlara basmak zorunda kalındığında kazanmayı sağlar
             if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f && emf > 0.5f)
-                combinationBonus += 0.50f; // Ekstra sinerji (tüm butonlar birlikte - artırıldı)
+                combinationBonus += 0.60f; // Ekstra sinerji (tüm butonlar birlikte - güçlendirildi)
             
             // Kafein + Lavanta + Melatonin + Radyasyon + Isı: TÜM BUTONLAR (Maksimum Sinerji)
             // Bu, tüm butonlara 3'er kere basıldığında kazanmayı sağlayan optimal kombinasyon
+            // Isı olumsuz ama diğer butonların gücü ısının zararını dengeler
             if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f && emf > 0.5f && warmAir > 0.5f)
-                combinationBonus += 0.40f; // Maksimum sinerji (tüm butonlar birlikte)
+                combinationBonus += 0.50f; // Maksimum sinerji (tüm butonlar birlikte - güçlendirildi)
         }
         
-        // Üçlü kombinasyonlar (güçlü sinerji - ama daha az bonus)
+        // Üçlü kombinasyonlar (güçlü sinerji)
         if (activeButtonCount >= 3)
         {
-            combinationBonus += 0.15f; // Ekstra bonus (azaltıldı - daha zor)
+            combinationBonus += 0.25f; // Ekstra bonus (güçlendirildi)
         }
         
-        // Dörtlü kombinasyon (maksimum sinerji - ama daha az bonus)
+        // Dörtlü kombinasyon (maksimum sinerji)
         if (activeButtonCount >= 4)
         {
-            combinationBonus += 0.20f; // Ekstra bonus (azaltıldı - daha zor)
+            combinationBonus += 0.30f; // Ekstra bonus (güçlendirildi)
+        }
+        
+        // Beşli kombinasyon (tüm butonlar - maksimum sinerji)
+        if (activeButtonCount >= 5)
+        {
+            combinationBonus += 0.35f; // Ekstra bonus (tüm butonlar birlikte)
         }
         
         // Clamp combination bonus (negatif olabilir - cezalandırıcı kombinasyonlar için)
@@ -901,19 +963,22 @@ public class DreamLogicController : MonoBehaviour
             protectionFactor = Mathf.Clamp01(protectionFactor);
             radiationDamage *= (1f - protectionFactor); // Koruyucu faktör radyasyon zararını azaltır
             
+            // StructuralIntegrity hesaplama: Beyin sağlığı ve büyüme potansiyeli
+            // Shrink değeri 0.900'dan 0.350'e düşmek için StructuralIntegrity ≈ 0.61 olmalı
+            // Bu yüzden butonların etkilerini güçlendirmeliyiz
             float baseStructuralIntegrity = Mathf.Clamp01(
-                0.30f * Relaxation +      // Lavanta: Beyin sağlığını artırır
-                0.25f * Arousal +        // Kafein: Aktivite artışı beyin büyümesine yardımcı
-                0.15f * Clarity +        // Netlik beyin sağlığını gösterir
-                0.02f * melatonin -      // Melatonin: Çok minimal iyileşme (tek başına neredeyse yok)
-                0.15f * melatonin -      // Melatonin: Beyin büyümesini yavaşlatır (derin uyku ama pasif - NEGATİF ETKİ)
+                0.40f * Relaxation +      // Lavanta: Beyin sağlığını artırır (güçlendirildi)
+                0.35f * Arousal +        // Kafein: Aktivite artışı beyin büyümesine yardımcı (güçlendirildi)
+                0.20f * Clarity +        // Netlik beyin sağlığını gösterir (güçlendirildi)
+                0.35f * melatonin +      // Melatonin: Beyin sağlığını artırır (güçlendirildi)
                 radiationDamage -        // Radyasyon: Yüksek parçalanma (ama koruyucu faktörlerle azaltılmış)
-                0.15f * ThermalStress    // Isı: Hafif negatif etki
+                0.40f * ThermalStress -  // Isı: Yüksek termal stres (olumsuz etki)
+                0.25f * warmAir          // Isı: Direkt olumsuz etki (beyin sağlığını bozar)
             );
             
             // KOMBİNASYON BONUSU: Kombinasyonlar StructuralIntegrity'yi güçlendirir
-            // Ama daha az bonus (daha zor kazanma)
-            float structuralIntegrity = Mathf.Clamp01(baseStructuralIntegrity + combinationBonus * 0.50f);
+            // Kombinasyon bonusunu artırdık (daha güçlü sinerji)
+            float structuralIntegrity = Mathf.Clamp01(baseStructuralIntegrity + combinationBonus * 0.70f);
             structuralIntegrity = Mathf.Clamp01(structuralIntegrity);
             
             // Hedef shrink değeri: StructuralIntegrity arttıkça başlangıç değerinden 0'a git
@@ -956,12 +1021,19 @@ public class DreamLogicController : MonoBehaviour
             if (brainMat.HasProperty(maxShrinkDepthID))
                 brainPropertyBlock.SetFloat(maxShrinkDepthID, shrinkScale);
             
-            // MinObjectScale: Shrink amount azaldıkça (beyin büyüdükçe) mesh scale artar
-            // Material'daki initialMinObjectScale (0.6) maksimum küçülme için (shrink = 1.0)
+            // MinObjectScale: Shrink amount arttıkça (beyin küçüldükçe) mesh scale azalır
+            // Shrink değeri YÜKSEK = beyin KÜÇÜK (shader mantığı: lerp(1.0, _MinObjectScale, _ShrinkAmount))
             // Shrink amount 0.0 olduğunda mesh scale 1.0 olmalı (tam büyük)
-            // Shrink amount 1.0 olduğunda mesh scale initialMinObjectScale olmalı (0.6)
-            // Ama çok agresif olmasın, minimum scale'i biraz artıralım
-            float minScaleLimit = Mathf.Max(initialMinObjectScale, 0.7f); // Minimum 0.7 (0.6'den daha az agresif)
+            // Shrink amount 1.0 olduğunda mesh scale minimum olmalı (küçük beyin)
+            // Başlangıç shrink = 0.900 olduğunda beyin küçük görünmeli (görsel olarak küçük başlar)
+            // Kazanma shrink = 0.350 olduğunda beyin büyük görünmeli
+            // Shader mantığı: lerp(1.0, _MinObjectScale, _ShrinkAmount)
+            // Yani shrink=0.0 → scale=1.0 (büyük), shrink=1.0 → scale=_MinObjectScale (küçük)
+            // Başlangıç shrink=0.900 olduğunda beyin küçük görünmeli (scale ≈ 0.55)
+            // Kazanma shrink=0.350 olduğunda beyin büyük görünmeli (scale ≈ 0.81)
+            // Bu yüzden MinObjectScale'i daha düşük yapmalıyız (0.4-0.45 arası)
+            float minScaleLimit = Mathf.Min(initialMinObjectScale, 0.45f); // Maximum 0.45 (daha belirgin küçük beyin için)
+            // Shrink değeri arttıkça scale azalır (shader mantığına uygun)
             float minMeshScale = Mathf.Lerp(1.0f, minScaleLimit, currentShrinkAmount);
             minMeshScale = Mathf.Clamp(minMeshScale, minScaleLimit, 1.0f);
             if (brainMat.HasProperty(minMeshScaleID))
@@ -1036,12 +1108,12 @@ public class DreamLogicController : MonoBehaviour
             float brainSizeFactor = Mathf.InverseLerp(winShrinkThreshold, 1.0f, currentShrinkAmount); // 0 = max beyin, 1 = min beyin
             
             // Dream Coherence: Rüya tutarlılığını gösteren parametre (kombinasyonlarla artar)
-            // Melatonin tek başına NEREDEYSE HİÇ ETKİSİ YOK, sadece kombinasyonlarda güçlenir
+            // Melatonin derin uyku sağlar ve rüya tutarlılığını artırır
             float dreamCoherence = Mathf.Clamp01(
                 0.40f * Clarity +                  // Netlik tutarlılık sağlar
                 0.25f * Relaxation +               // Rahatlama tutarlılık artırır
                 0.15f * (1f - Chaos) +             // Kaos azaldıkça tutarlılık artar
-                0.08f * melatonin +                // Melatonin çok minimal coherence artışı (tek başına neredeyse yok)
+                0.30f * melatonin +                // Melatonin coherence artışı (derin uyku tutarlılık sağlar)
                 combinationBonus * 0.50f           // Kombinasyonlar sinerji yaratır (asıl güç burada)
             );
             
@@ -1051,7 +1123,7 @@ public class DreamLogicController : MonoBehaviour
             float baseBlurAmount = Mathf.Lerp(0.0f, 1.0f, 1f - Clarity);
             float coherenceBlurReduction = dreamCoherence * 0.50f; // Coherence blur'ı azaltır
             float combinationBlurReduction = combinationBonus * 0.40f; // Kombinasyonlar blur'ı azaltır
-            float melatoninBlurReduction = melatonin * 0.08f; // Melatonin çok minimal blur azaltma (tek başına neredeyse yok)
+            float melatoninBlurReduction = melatonin * 0.25f; // Melatonin blur'ı azaltır (derin uyku netliği artırır)
             float calculatedBlur = Mathf.Clamp01(baseBlurAmount - coherenceBlurReduction - combinationBlurReduction - melatoninBlurReduction);
             
             // Beyin büyüklüğü faktörü: Beyin max değilse (shrink yüksekse) blur minimum değerde kalır
