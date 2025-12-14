@@ -1096,6 +1096,38 @@ public class DreamLogicController : MonoBehaviour
     }
     
     /// <summary>
+    /// Mevcut shrink miktarını döndürür (UI için public erişim)
+    /// </summary>
+    public float GetCurrentShrinkAmount()
+    {
+        return currentShrinkAmount;
+    }
+    
+    /// <summary>
+    /// Başlangıç shrink değerini döndürür (UI için public erişim)
+    /// </summary>
+    public float GetInitialShrinkAmount()
+    {
+        return initialShrinkAmount;
+    }
+    
+    /// <summary>
+    /// Mevcut blur miktarını döndürür (UI için public erişim)
+    /// </summary>
+    public float GetCurrentBlurAmount()
+    {
+        return currentBlurAmount;
+    }
+    
+    /// <summary>
+    /// Mevcut glitch miktarını döndürür (UI için public erişim)
+    /// </summary>
+    public float GetCurrentGlitchAmount()
+    {
+        return currentGlitchAmount;
+    }
+    
+    /// <summary>
     /// Material property'lerini yeni state'lere göre güncelle
     /// </summary>
     private void UpdateMaterialProperties()

@@ -63,7 +63,7 @@ public class DreamClarityUIManager : MonoBehaviour
     public float minScreenEdgeDistance = 20f;
     
     // Smooth değerler
-    private float smoothClarityValue = 0f;
+    private float smoothClarityValue = 0.8f; // Başlangıç blur değeri ile başla
     private float smoothClarityVelocity = 0f;
     
     // Başlangıç blur değeri
@@ -79,12 +79,41 @@ public class DreamClarityUIManager : MonoBehaviour
     {
         // UI RectTransform'u al
         uiRectTransform = GetComponent<RectTransform>();
+        if (uiRectTransform == null)
+        {
+            Debug.LogError("DreamClarityUIManager: RectTransform bulunamadı! Component devre dışı bırakılıyor.");
+            enabled = false;
+            return;
+        }
+        
+        // UI bileşenlerini kontrol et
+        if (clarityValueText == null)
+        {
+            clarityValueText = GetComponentInChildren<TextMeshProUGUI>();
+        }
+        if (progressBarFill == null)
+        {
+            Image[] images = GetComponentsInChildren<Image>();
+            foreach (Image img in images)
+            {
+                if (img.type == Image.Type.Filled)
+                {
+                    progressBarFill = img;
+                    break;
+                }
+            }
+        }
         
         // Canvas'ı bul
         canvas = GetComponentInParent<Canvas>();
         if (canvas == null)
         {
             canvas = FindObjectOfType<Canvas>();
+        }
+        
+        if (canvas == null)
+        {
+            Debug.LogWarning("DreamClarityUIManager: Canvas bulunamadı! Dinamik pozisyonlama çalışmayabilir.");
         }
         
         // Main Camera'yı bul
@@ -94,6 +123,11 @@ public class DreamClarityUIManager : MonoBehaviour
             mainCamera = FindObjectOfType<Camera>();
         }
         
+        if (mainCamera == null)
+        {
+            Debug.LogWarning("DreamClarityUIManager: Camera bulunamadı! Dinamik pozisyonlama çalışmayabilir.");
+        }
+        
         // DreamLogicController'ı bul (eğer atanmamışsa)
         if (dreamLogicController == null)
         {
@@ -101,50 +135,35 @@ public class DreamClarityUIManager : MonoBehaviour
         }
         
         // Dream mesh'ini bul
-        if (dreamMeshTransform == null && dreamLogicController != null)
+        if (dreamMeshTransform == null)
         {
-            // DreamLogicController'dan dreamRenderer'ı al
-            var dreamRendererField = typeof(DreamLogicController).GetField("dreamRenderer", 
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            
-            if (dreamRendererField != null)
+            // Önce sahnede "Dream" isimli objeyi ara
+            GameObject dreamObj = GameObject.Find("Dream");
+            if (dreamObj == null)
             {
-                Renderer dreamRenderer = dreamRendererField.GetValue(dreamLogicController) as Renderer;
-                if (dreamRenderer != null)
-                {
-                    dreamMeshTransform = dreamRenderer.transform;
-                }
+                dreamObj = GameObject.FindGameObjectWithTag("Dream");
             }
-            
-            // Eğer hala bulunamadıysa, sahnede "Dream" isimli objeyi ara
-            if (dreamMeshTransform == null)
+            if (dreamObj != null)
             {
-                GameObject dreamObj = GameObject.Find("Dream");
-                if (dreamObj == null)
-                {
-                    dreamObj = GameObject.FindGameObjectWithTag("Dream");
-                }
-                if (dreamObj != null)
-                {
-                    dreamMeshTransform = dreamObj.transform;
-                }
+                dreamMeshTransform = dreamObj.transform;
             }
         }
         
         // Başlangıç değerlerini al
         if (dreamLogicController != null)
         {
-            // Reflection ile private değişkenlere eriş
-            var currentBlurField = typeof(DreamLogicController).GetField("currentBlurAmount", 
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (currentBlurField != null)
-            {
-                initialBlurAmount = (float)currentBlurField.GetValue(dreamLogicController);
-                smoothClarityValue = initialBlurAmount;
-            }
+            // Public method ile blur değerini al (reflection yerine - build'de daha güvenilir)
+            initialBlurAmount = dreamLogicController.GetCurrentBlurAmount();
+            smoothClarityValue = initialBlurAmount;
+        }
+        else
+        {
+            // DreamLogicController bulunamadıysa varsayılan değerleri kullan
+            initialBlurAmount = 0.8f;
+            smoothClarityValue = 0.8f;
         }
         
-        // Başlangıç UI güncellemesi
+        // Başlangıç UI güncellemesi (UI bileşenleri varsa)
         UpdateUI(smoothClarityValue);
         
         // Dinamik pozisyonlama başlangıç güncellemesi
@@ -172,21 +191,15 @@ public class DreamClarityUIManager : MonoBehaviour
             return;
         }
         
-        // Reflection ile currentBlurAmount'u al
-        var currentBlurField = typeof(DreamLogicController).GetField("currentBlurAmount", 
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        // Public method ile currentBlurAmount'u al (reflection yerine - build'de daha güvenilir)
+        float currentBlur = dreamLogicController.GetCurrentBlurAmount();
         
-        if (currentBlurField != null)
-        {
-            float currentBlur = (float)currentBlurField.GetValue(dreamLogicController);
-            
-            // Smooth interpolation
-            smoothClarityValue = Mathf.SmoothDamp(smoothClarityValue, currentBlur, 
-                ref smoothClarityVelocity, updateSmoothTime);
-            
-            // UI'ı güncelle
-            UpdateUI(smoothClarityValue);
-        }
+        // Smooth interpolation
+        smoothClarityValue = Mathf.SmoothDamp(smoothClarityValue, currentBlur, 
+            ref smoothClarityVelocity, updateSmoothTime);
+        
+        // UI'ı güncelle (her frame çağrılmalı - ShrinkUIManager gibi)
+        UpdateUI(smoothClarityValue);
         
         // Dinamik pozisyonlama güncellemesi
         if (useDynamicPositioning)
