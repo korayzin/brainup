@@ -26,7 +26,7 @@ public class BrainToDreamTransition : MonoBehaviour
     
     [Tooltip("Fade out başlangıç zamanı (kamera hareketinin yüzde kaçında başlasın? 0-1)")]
     [Range(0f, 1f)]
-    public float fadeStartTime = 0.6f; // %60'ta fade başlar
+    public float fadeStartTime = 0.3f; // %30'ta fade başlar (kamera hareketiyle birlikte)
     
     [Tooltip("Kamera hareket eğrisi (easing)")]
     public AnimationCurve cameraMoveCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
@@ -39,9 +39,9 @@ public class BrainToDreamTransition : MonoBehaviour
     [Tooltip("Geçilecek oyun sahnesi adı (Build Settings'teki sahne adı)")]
     public string targetSceneName = "SampleScene";
     
-    [Tooltip("Sahne geçişi için ekstra bekleme süresi (fade out tamamen bittikten sonra)")]
-    [Range(0.3f, 2f)]
-    public float sceneTransitionDelay = 0.8f; // Smooth geçiş için biraz daha uzun bekleme
+    [Tooltip("Sahne geçişi zamanı (fade out'un yüzde kaçında sahne değişsin? 0.8-0.95 arası önerilir)")]
+    [Range(0.7f, 1f)]
+    public float sceneTransitionTime = 0.85f; // Fade out'un %85'inde sahne değişir (smooth geçiş)
     
     [Header("Fade Out UI")]
     [Tooltip("Fade out için UI Image (otomatik oluşturulur veya manuel atanabilir)")]
@@ -232,8 +232,12 @@ public class BrainToDreamTransition : MonoBehaviour
         float elapsedTime = 0f;
         float fadeStartTimeActual = cameraMoveDuration * fadeStartTime; // Fade başlangıç zamanı
         float totalFadeTime = fadeStartTimeActual + fadeOutDuration; // Toplam fade süresi
+        float sceneTransitionTimeActual = fadeStartTimeActual + (fadeOutDuration * sceneTransitionTime); // Sahne geçiş zamanı
         
-        // Fade out'un tamamen bitmesi için toplam süreyi hesapla
+        // Sahne geçişi yapıldı mı?
+        bool sceneTransitioned = false;
+        
+        // Toplam animasyon süresi (kamera hareketi ve fade out)
         float totalAnimationTime = Mathf.Max(cameraMoveDuration, totalFadeTime);
         
         while (elapsedTime < totalAnimationTime)
@@ -264,43 +268,54 @@ public class BrainToDreamTransition : MonoBehaviour
                 
                 if (elapsedTime >= fadeStartTimeActual)
                 {
-                    // Fade out başladı
+                    // Fade out başladı (kamera hareketiyle birlikte)
                     float fadeProgress = (elapsedTime - fadeStartTimeActual) / fadeOutDuration;
                     fadeProgress = Mathf.Clamp01(fadeProgress);
                     
-                    // Smooth fade out için easing curve kullan
+                    // Smooth fade out
                     fadeAlpha = fadeProgress;
                 }
                 
-                // Fade out'u uygula (tamamen kararsın)
+                // Fade out'u uygula
                 fadeImage.color = new Color(fadeColor.r, fadeColor.g, fadeColor.b, fadeAlpha);
+            }
+            
+            // Sahne geçişi (fade out sırasında, delay olmadan)
+            if (!sceneTransitioned && elapsedTime >= sceneTransitionTimeActual)
+            {
+                sceneTransitioned = true;
+                
+                // Oyun sahnesine geç (fade out sırasında, smooth geçiş)
+                if (!string.IsNullOrEmpty(targetSceneName))
+                {
+                    Debug.Log($"BrainToDreamTransition: '{targetSceneName}' sahnesine geçiliyor... (Fade: {fadeImage?.color.a:F2})");
+                    SceneManager.LoadScene(targetSceneName);
+                    yield break; // Coroutine'i sonlandır
+                }
+                else
+                {
+                    Debug.LogWarning("BrainToDreamTransition: Hedef sahne adı belirtilmemiş! Geçiş yapılamıyor.");
+                }
             }
             
             yield return null;
         }
         
-        // Son pozisyonu garanti et
-        mainCamera.transform.position = finalPosition;
-        mainCamera.transform.rotation = targetRotation;
-        
-        // Fade out'u TAMAMEN tamamla (ekran tamamen kararsın)
-        if (fadeImage != null)
+        // Eğer sahne geçişi yapılmadıysa (güvenlik kontrolü)
+        if (!sceneTransitioned && !string.IsNullOrEmpty(targetSceneName))
         {
-            fadeImage.color = new Color(fadeColor.r, fadeColor.g, fadeColor.b, 1f);
-        }
-        
-        // Smooth sahne geçişi için ekstra bekleme (ekran tamamen karardıktan sonra)
-        yield return new WaitForSeconds(sceneTransitionDelay);
-        
-        // Oyun sahnesine geç
-        if (!string.IsNullOrEmpty(targetSceneName))
-        {
-            Debug.Log($"BrainToDreamTransition: '{targetSceneName}' sahnesine geçiliyor...");
+            // Son pozisyonu garanti et
+            mainCamera.transform.position = finalPosition;
+            mainCamera.transform.rotation = targetRotation;
+            
+            // Fade out'u TAMAMEN tamamla
+            if (fadeImage != null)
+            {
+                fadeImage.color = new Color(fadeColor.r, fadeColor.g, fadeColor.b, 1f);
+            }
+            
+            Debug.Log($"BrainToDreamTransition: '{targetSceneName}' sahnesine geçiliyor... (Yedek geçiş)");
             SceneManager.LoadScene(targetSceneName);
-        }
-        else
-        {
-            Debug.LogWarning("BrainToDreamTransition: Hedef sahne adı belirtilmemiş! Geçiş yapılamıyor.");
         }
     }
     

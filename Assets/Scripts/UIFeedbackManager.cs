@@ -61,11 +61,19 @@ public class UIFeedbackManager : MonoBehaviour
     [Tooltip("Beyin mesh Transform (otomatik bulunur, feedback beynin yanından çıkar)")]
     public Transform brainMeshTransform;
     
-    [Tooltip("Feedback'in beynin yanından çıkması için offset (world space)")]
+    [Tooltip("Feedback'in beynin yanından çıkması için offset (world space) - DEPRECATED: Artık her buton tipi için ayrı offset kullanılıyor")]
     public Vector3 brainOffset = new Vector3(0.5f, 0f, 0f); // Beynin sağından
     
     [Tooltip("Beyin mesh'ini kullan (buton pozisyonu yerine)")]
     public bool useBrainPosition = true;
+    
+    [Header("Buton Tipi Bazlı Offset'ler")]
+    [Tooltip("Her buton tipi için beynin etrafından çıkış pozisyonu (world space)")]
+    public Vector3 caffeineOffset = new Vector3(0.5f, 0.3f, 0f); // Sağ üst
+    public Vector3 radiationOffset = new Vector3(0f, 0.5f, 0f); // Üst
+    public Vector3 lavenderOffset = new Vector3(-0.5f, 0.3f, 0f); // Sol üst
+    public Vector3 melatoninOffset = new Vector3(-0.5f, -0.3f, 0f); // Sol alt
+    public Vector3 heatOffset = new Vector3(0.5f, -0.3f, 0f); // Sağ alt
     
     private Camera mainCamera;
     private RectTransform canvasRect;
@@ -149,6 +157,9 @@ public class UIFeedbackManager : MonoBehaviour
         
         if (useBrainPosition && brainMeshTransform != null)
         {
+            // Buton tipine göre uygun offset'i al
+            Vector3 buttonOffset = GetBrainOffsetForButtonType(buttonType);
+            
             // Beyin mesh'inin pozisyonunu al ve offset uygula
             Vector3 brainPos = brainMeshTransform.position;
             
@@ -157,19 +168,41 @@ public class UIFeedbackManager : MonoBehaviour
             if (brainRenderer != null)
             {
                 Bounds bounds = brainRenderer.bounds;
-                // Beynin sağ tarafından çık (veya offset'e göre)
-                feedbackWorldPosition = bounds.center + brainMeshTransform.TransformDirection(brainOffset);
+                // Buton tipine göre beynin farklı noktalarından çık
+                feedbackWorldPosition = bounds.center + brainMeshTransform.TransformDirection(buttonOffset);
             }
             else
             {
                 // Renderer yoksa transform pozisyonunu kullan
-                feedbackWorldPosition = brainPos + brainMeshTransform.TransformDirection(brainOffset);
+                feedbackWorldPosition = brainPos + brainMeshTransform.TransformDirection(buttonOffset);
             }
         }
         
         // Convert world position to screen position
         Vector2 screenPosition = WorldToScreenPosition(feedbackWorldPosition);
         ShowFeedback(buttonType, screenPosition);
+    }
+    
+    /// <summary>
+    /// Gets the brain offset for a specific button type
+    /// </summary>
+    private Vector3 GetBrainOffsetForButtonType(ButtonManager.ButtonType buttonType)
+    {
+        switch (buttonType)
+        {
+            case ButtonManager.ButtonType.Caffeine:
+                return caffeineOffset;
+            case ButtonManager.ButtonType.Radiation:
+                return radiationOffset;
+            case ButtonManager.ButtonType.Lavender:
+                return lavenderOffset;
+            case ButtonManager.ButtonType.Melatonin:
+                return melatoninOffset;
+            case ButtonManager.ButtonType.Heat:
+                return heatOffset;
+            default:
+                return brainOffset; // Fallback to default
+        }
     }
     
     /// <summary>
