@@ -108,25 +108,46 @@ public class ShrinkUIManager : MonoBehaviour
         }
         
         // Beyin mesh'ini bul
-        if (brainMeshTransform == null)
+        if (brainMeshTransform == null && dreamLogicController != null)
         {
-            // Önce sahnede "Brain" isimli objeyi ara
-            GameObject brainObj = GameObject.Find("Brain");
-            if (brainObj == null)
+            // DreamLogicController'dan brainRenderer'ı al
+            var brainRendererField = typeof(DreamLogicController).GetField("brainRenderer", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            
+            if (brainRendererField != null)
             {
-                brainObj = GameObject.FindGameObjectWithTag("Brain");
+                Renderer brainRenderer = brainRendererField.GetValue(dreamLogicController) as Renderer;
+                if (brainRenderer != null)
+                {
+                    brainMeshTransform = brainRenderer.transform;
+                }
             }
-            if (brainObj != null)
+            
+            // Eğer hala bulunamadıysa, sahnede "Brain" isimli objeyi ara
+            if (brainMeshTransform == null)
             {
-                brainMeshTransform = brainObj.transform;
+                GameObject brainObj = GameObject.Find("Brain");
+                if (brainObj == null)
+                {
+                    brainObj = GameObject.FindGameObjectWithTag("Brain");
+                }
+                if (brainObj != null)
+                {
+                    brainMeshTransform = brainObj.transform;
+                }
             }
         }
         
         // Başlangıç değerlerini al
         if (dreamLogicController != null)
         {
-            // Public method ile değerleri al (reflection yerine - build'de daha güvenilir)
-            initialShrinkAmount = dreamLogicController.GetInitialShrinkAmount();
+            // Reflection ile private değişkenlere eriş
+            var initialShrinkField = typeof(DreamLogicController).GetField("initialShrinkAmount", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (initialShrinkField != null)
+            {
+                initialShrinkAmount = (float)initialShrinkField.GetValue(dreamLogicController);
+            }
             
             // Win threshold'u al
             winThreshold = dreamLogicController.winShrinkThreshold;
@@ -162,15 +183,21 @@ public class ShrinkUIManager : MonoBehaviour
             return;
         }
         
-        // Public method ile currentShrinkAmount'u al (reflection yerine - build'de daha güvenilir)
-        float currentShrink = dreamLogicController.GetCurrentShrinkAmount();
+        // Reflection ile currentShrinkAmount'u al
+        var currentShrinkField = typeof(DreamLogicController).GetField("currentShrinkAmount", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         
-        // Smooth interpolation
-        smoothShrinkValue = Mathf.SmoothDamp(smoothShrinkValue, currentShrink, 
-            ref smoothShrinkVelocity, updateSmoothTime);
-        
-        // UI'ı güncelle
-        UpdateUI(smoothShrinkValue);
+        if (currentShrinkField != null)
+        {
+            float currentShrink = (float)currentShrinkField.GetValue(dreamLogicController);
+            
+            // Smooth interpolation
+            smoothShrinkValue = Mathf.SmoothDamp(smoothShrinkValue, currentShrink, 
+                ref smoothShrinkVelocity, updateSmoothTime);
+            
+            // UI'ı güncelle
+            UpdateUI(smoothShrinkValue);
+        }
         
         // Dinamik pozisyonlama güncellemesi
         if (useDynamicPositioning)

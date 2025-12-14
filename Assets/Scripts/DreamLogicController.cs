@@ -724,6 +724,7 @@ public class DreamLogicController : MonoBehaviour
 
     /// <summary>
     /// Material referanslarını ve property ID'lerini başlat
+    /// ÖNEMLİ: Build'de çalışması için material instance'ı oluşturulmalı
     /// </summary>
     private void InitializeMaterials()
     {
@@ -733,9 +734,16 @@ public class DreamLogicController : MonoBehaviour
             Renderer[] allRenderers = FindObjectsOfType<Renderer>();
             foreach (Renderer renderer in allRenderers)
             {
-                if (renderer.sharedMaterial == brainMat || renderer.material == brainMat)
+                // sharedMaterial kontrolü (build'de daha güvenilir)
+                if (renderer.sharedMaterial != null && renderer.sharedMaterial.name == brainMat.name)
                 {
                     brainRenderer = renderer;
+                    // Material instance'ı oluştur (build'de çalışması için gerekli)
+                    Material brainInstance = renderer.material;
+                    if (brainInstance != null)
+                    {
+                        Debug.Log($"Brain renderer bulundu ve material instance oluşturuldu: {renderer.gameObject.name}");
+                    }
                     break;
                 }
             }
@@ -746,12 +754,30 @@ public class DreamLogicController : MonoBehaviour
             Renderer[] allRenderers = FindObjectsOfType<Renderer>();
             foreach (Renderer renderer in allRenderers)
             {
-                if (renderer.sharedMaterial == dreamMat || renderer.material == dreamMat)
+                // sharedMaterial kontrolü (build'de daha güvenilir)
+                if (renderer.sharedMaterial != null && renderer.sharedMaterial.name == dreamMat.name)
                 {
                     dreamRenderer = renderer;
+                    // Material instance'ı oluştur (build'de çalışması için gerekli)
+                    Material dreamInstance = renderer.material;
+                    if (dreamInstance != null)
+                    {
+                        Debug.Log($"Dream renderer bulundu ve material instance oluşturuldu: {renderer.gameObject.name}");
+                    }
                     break;
                 }
             }
+        }
+        
+        // Renderer bulunamadıysa uyarı ver
+        if (brainRenderer == null && brainMat != null)
+        {
+            Debug.LogWarning($"DreamLogicController: Brain renderer bulunamadı! Material: {brainMat.name}");
+        }
+        
+        if (dreamRenderer == null && dreamMat != null)
+        {
+            Debug.LogWarning($"DreamLogicController: Dream renderer bulunamadı! Material: {dreamMat.name}");
         }
         
         // MaterialPropertyBlock'ları oluştur
@@ -1096,38 +1122,6 @@ public class DreamLogicController : MonoBehaviour
     }
     
     /// <summary>
-    /// Mevcut shrink miktarını döndürür (UI için public erişim)
-    /// </summary>
-    public float GetCurrentShrinkAmount()
-    {
-        return currentShrinkAmount;
-    }
-    
-    /// <summary>
-    /// Başlangıç shrink değerini döndürür (UI için public erişim)
-    /// </summary>
-    public float GetInitialShrinkAmount()
-    {
-        return initialShrinkAmount;
-    }
-    
-    /// <summary>
-    /// Mevcut blur miktarını döndürür (UI için public erişim)
-    /// </summary>
-    public float GetCurrentBlurAmount()
-    {
-        return currentBlurAmount;
-    }
-    
-    /// <summary>
-    /// Mevcut glitch miktarını döndürür (UI için public erişim)
-    /// </summary>
-    public float GetCurrentGlitchAmount()
-    {
-        return currentGlitchAmount;
-    }
-    
-    /// <summary>
     /// Material property'lerini yeni state'lere göre güncelle
     /// </summary>
     private void UpdateMaterialProperties()
@@ -1335,8 +1329,16 @@ public class DreamLogicController : MonoBehaviour
         }
         
         // DREAM MATERIAL MAPPING
+        // ÖNEMLİ: Build'de çalışması için renderer ve material instance kontrolü
         if (dreamRenderer != null && dreamPropertyBlock != null && dreamMat != null)
         {
+            // Material instance'ının oluşturulduğundan emin ol (build'de gerekli)
+            if (dreamRenderer.material == null)
+            {
+                Debug.LogWarning("DreamLogicController: Dream renderer material instance null! Renderer bulunamadı olabilir.");
+                return; // Material instance yoksa devam etme
+            }
+            
             // Eğer oyun bitti ve kazanma koşulu sağlandıysa, dream %100 (blur = 0, glitch = 0)
             if (isWinCondition)
             {
@@ -1351,7 +1353,7 @@ public class DreamLogicController : MonoBehaviour
                 currentBlurAmount = 0.0f;
                 currentGlitchAmount = 0.0f;
                 
-                // Material property block'ı uygula
+                // Material property block'ı uygula (her frame çağrılmalı)
                 dreamRenderer.SetPropertyBlock(dreamPropertyBlock);
             }
             else
@@ -1502,7 +1504,17 @@ public class DreamLogicController : MonoBehaviour
             if (dreamMat.HasProperty(rimColorDreamID))
                 dreamPropertyBlock.SetColor(rimColorDreamID, rimColor);
             
+            // ÖNEMLİ: MaterialPropertyBlock'u her frame uygula (build'de çalışması için gerekli)
+            // Bu çağrı olmadan değişiklikler görünmez
             dreamRenderer.SetPropertyBlock(dreamPropertyBlock);
+            }
+        }
+        else
+        {
+            // Debug: Renderer veya material bulunamadıysa uyarı ver (sadece bir kere)
+            if (dreamRenderer == null && dreamMat != null)
+            {
+                Debug.LogWarning("DreamLogicController: Dream renderer null! Material property'leri güncellenemiyor.");
             }
         }
     }

@@ -435,8 +435,27 @@ public class MeshChainSway : MonoBehaviour
     {
         isSwaying = false;
         
-        // Yumuşak bir şekilde orijinal pozisyona dön
-        StartCoroutine(ReturnToOriginalPosition());
+        // Obje aktif ve enabled ise coroutine başlat
+        // Play mode'dan çıktıktan sonra inactive objelerde coroutine başlatılamaz
+        if (gameObject.activeInHierarchy && enabled)
+        {
+            StartCoroutine(ReturnToOriginalPosition());
+        }
+        else
+        {
+            // Obje inactive ise direkt orijinal pozisyona ayarla
+            transform.localRotation = Quaternion.Euler(originalRotation);
+            transform.localPosition = originalPosition;
+            currentSwayAngle = 0f;
+            currentSwayVelocity = 0f;
+            currentSwayAcceleration = 0f;
+            secondarySwayAngle = 0f;
+            secondarySwayVelocity = 0f;
+            smoothCurrentAngle = 0f;
+            smoothCurrentAngleVelocity = 0f;
+            smoothSecondaryAngle = 0f;
+            smoothSecondaryAngleVelocity = 0f;
+        }
     }
     
     /// <summary>
@@ -584,7 +603,35 @@ public class MeshChainSway : MonoBehaviour
     void OnDisable()
     {
         // Script devre dışı bırakıldığında sallanmayı durdur
-        StopSway();
+        // Coroutine'leri durdur (obje inactive olabilir)
+        if (swayCoroutine != null)
+        {
+            StopCoroutine(swayCoroutine);
+            swayCoroutine = null;
+        }
+        
+        isSwaying = false;
+        
+        // Obje hala aktifse EndSway çağır, değilse direkt sıfırla
+        if (gameObject.activeInHierarchy)
+        {
+            EndSway();
+        }
+        else
+        {
+            // Obje inactive ise direkt orijinal pozisyona ayarla
+            transform.localRotation = Quaternion.Euler(originalRotation);
+            transform.localPosition = originalPosition;
+            currentSwayAngle = 0f;
+            currentSwayVelocity = 0f;
+            currentSwayAcceleration = 0f;
+            secondarySwayAngle = 0f;
+            secondarySwayVelocity = 0f;
+            smoothCurrentAngle = 0f;
+            smoothCurrentAngleVelocity = 0f;
+            smoothSecondaryAngle = 0f;
+            smoothSecondaryAngleVelocity = 0f;
+        }
     }
 }
 
