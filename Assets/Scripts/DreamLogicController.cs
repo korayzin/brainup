@@ -39,9 +39,9 @@ public class DreamLogicController : MonoBehaviour
     public float smoothTime = 0.3f;
     
     [Header("Oyun Durumu")]
-    [Tooltip("Kazanma için shrink değeri (beyin büyüklüğü - 0.190 veya daha küçük)")]
+    [Tooltip("Kazanma için shrink değeri (beyin büyüklüğü - 0.1'den küçük)")]
     [Range(0f, 1f)]
-    public float winShrinkThreshold = 0.190f; // Beyin yeterince büyük (shrink <= 0.190)
+    public float winShrinkThreshold = 0.1f; // Beyin yeterince büyük (shrink < 0.1)
     
     [Tooltip("Beyin max değilse blur/glitch minimum değeri (rüya asla %100 net olmaz)")]
     [Range(0f, 1f)]
@@ -175,8 +175,8 @@ public class DreamLogicController : MonoBehaviour
         // winShrinkThreshold değerini garanti et (Inspector'da yanlış ayarlanmış olabilir)
         if (winShrinkThreshold <= 0f || winShrinkThreshold > 1f)
         {
-            winShrinkThreshold = 0.190f; // Varsayılan değer
-            Debug.LogWarning($"DreamLogicController: winShrinkThreshold geçersiz değer, 0.190'a ayarlandı.");
+            winShrinkThreshold = 0.1f; // Varsayılan değer
+            Debug.LogWarning($"DreamLogicController: winShrinkThreshold geçersiz değer, 0.1'e ayarlandı.");
         }
         
         InitializeMaterials();
@@ -588,7 +588,7 @@ public class DreamLogicController : MonoBehaviour
         gameEnded = true;
         
         // winShrinkThreshold değerini garanti et (güvenlik kontrolü - Inspector'da yanlış ayarlanmış olabilir)
-        const float WIN_THRESHOLD = 0.190f; // Sabit değer - her zaman 0.190
+        const float WIN_THRESHOLD = 0.1f; // Sabit değer - her zaman 0.1
         if (winShrinkThreshold <= 0f || winShrinkThreshold > 1f)
         {
             winShrinkThreshold = WIN_THRESHOLD;
@@ -601,37 +601,37 @@ public class DreamLogicController : MonoBehaviour
         // DEBUG: Beyin büyüklüğü ve rüya netliği bilgilerini göster
         Debug.Log($"=== OYUN BİTTİ ===");
         Debug.Log($"Beyin Büyüklüğü (Shrink): {currentShrinkAmount:F3}");
-        Debug.Log($"Kazanma Threshold: {actualThreshold:F3} (Shrink <= {actualThreshold:F3} ise KAZANMA)");
+        Debug.Log($"Kazanma Threshold: {actualThreshold:F3} (Shrink < {actualThreshold:F3} ise KAZANMA)");
         Debug.Log($"Rüya Netliği (Blur): {currentBlurAmount:F3}");
         Debug.Log($"Rüya Kalitesi (Glitch): {currentGlitchAmount:F3}");
         
-        // Kazanma koşulu: Shrink değeri 0.190'dan küçük veya eşit olmalı
-        bool brainIsMax = currentShrinkAmount <= actualThreshold;
+        // Kazanma koşulu: Shrink değeri 0.1'den küçük olmalı
+        bool brainIsMax = currentShrinkAmount < actualThreshold;
         
         // Debug: Karşılaştırma detayları
         Debug.Log($"=== KAZANMA KONTROLÜ ===");
         Debug.Log($"Shrink Değeri: {currentShrinkAmount:F3}");
         Debug.Log($"Threshold: {actualThreshold:F3}");
-        Debug.Log($"Karşılaştırma: {currentShrinkAmount:F3} <= {actualThreshold:F3} = {brainIsMax}");
+        Debug.Log($"Karşılaştırma: {currentShrinkAmount:F3} < {actualThreshold:F3} = {brainIsMax}");
         
-        // Kazanma: Shrink <= 0.190
+        // Kazanma: Shrink < 0.1
         bool hasWon = brainIsMax;
         
         if (hasWon)
         {
-            // KAZANILDI! Shrink değeri 0.190'dan küçük veya eşit
+            // KAZANILDI! Shrink değeri 0.1'den küçük
             gameWon = true;
             Debug.Log($"✅✅✅ OYUN KAZANILDI! ✅✅✅");
-            Debug.Log($"Beyin yeterince büyük: Shrink={currentShrinkAmount:F3} <= Threshold={actualThreshold:F3}");
+            Debug.Log($"Beyin yeterince büyük: Shrink={currentShrinkAmount:F3} < Threshold={actualThreshold:F3}");
             Debug.Log($"Rüya Netliği: Blur={currentBlurAmount:F3}, Glitch={currentGlitchAmount:F3}");
             OnGameWon();
         }
         else
         {
-            // KAYBEDİLDİ! Shrink değeri 0.190'dan büyük
+            // KAYBEDİLDİ! Shrink değeri 0.1'den büyük veya eşit
             gameWon = false;
             Debug.Log($"❌❌❌ OYUN KAYBEDİLDİ! ❌❌❌");
-            Debug.Log($"Beyin yeterince büyük değil: Shrink={currentShrinkAmount:F3} > Threshold={actualThreshold:F3}");
+            Debug.Log($"Beyin yeterince büyük değil: Shrink={currentShrinkAmount:F3} >= Threshold={actualThreshold:F3}");
             Debug.Log($"Rüya Netliği: Blur={currentBlurAmount:F3}, Glitch={currentGlitchAmount:F3}");
             OnGameLost();
         }
@@ -1100,8 +1100,9 @@ public class DreamLogicController : MonoBehaviour
     /// </summary>
     private void UpdateMaterialProperties()
     {
-        // ÖNEMLİ: Eğer shrink değeri 0.190'dan küçük veya eşitse, brain ve dream %100 olmalı
-        bool isWinCondition = currentShrinkAmount <= 0.190f;
+        // ÖNEMLİ: Kazanma koşulu sadece oyun bittiğinde kontrol edilmeli
+        // Oyun devam ederken, beyin %100'e ulaşsa bile kötü butonların etkisiyle düşebilmeli
+        bool isWinCondition = gameEnded && currentShrinkAmount < 0.1f;
         
         // Kombinasyon bonusunu hesapla
         int activeButtonCount;
@@ -1111,7 +1112,7 @@ public class DreamLogicController : MonoBehaviour
         // BRAIN MATERIAL MAPPING
         if (brainRenderer != null && brainPropertyBlock != null && brainMat != null)
         {
-            // Eğer kazanma koşulu sağlandıysa, brain %100 (shrink = 0)
+            // Eğer oyun bitti ve kazanma koşulu sağlandıysa, brain %100 (shrink = 0)
             if (isWinCondition)
             {
                 currentShrinkAmount = 0.0f;
@@ -1133,7 +1134,7 @@ public class DreamLogicController : MonoBehaviour
             }
             else
             {
-                // Normal hesaplama devam eder
+                // Normal hesaplama devam eder - Oyun devam ederken her zaman normal hesaplama yapılır
             // ShrinkAmount: Başlangıç 1.0 (maksimum küçük), kombinasyonlarla 0'a yaklaşır
             // StructuralIntegrity hesaplama:
             // - Lavanta: Relaxation artırır, Fragmentation azaltır → StructuralIntegrity artar (beyin büyür)
@@ -1164,8 +1165,8 @@ public class DreamLogicController : MonoBehaviour
             // YOL 2: Lavanta → Melatonin → Kafein → Radyasyon → Isı
             // YOL 3: Melatonin → Lavanta → Radyasyon → Kafein → Isı
             // YOL 4: Radyasyon → Lavanta → Melatonin → Kafein → Isı
-            // Tüm yollar için StructuralIntegrity ≈ 0.79 olmalı (shrink 0.190'a düşmek için)
-            // Shrink 0.900'dan 0.190'a düşmek için: Lerp(0.900, 0.0, 0.79) ≈ 0.189
+            // Tüm yollar için StructuralIntegrity ≈ 0.89 olmalı (shrink 0.1'den küçük olmak için)
+            // Shrink 0.900'dan 0.1'e düşmek için: Lerp(0.900, 0.0, 0.89) ≈ 0.099
             float baseStructuralIntegrity = Mathf.Clamp01(
                 0.42f * Relaxation +      // Lavanta: Beyin sağlığını artırır (tüm yollar için gerekli)
                 0.38f * Arousal +        // Kafein: Aktivite artışı beyin büyümesine yardımcı (tüm yollar için)
@@ -1304,7 +1305,7 @@ public class DreamLogicController : MonoBehaviour
         // DREAM MATERIAL MAPPING
         if (dreamRenderer != null && dreamPropertyBlock != null && dreamMat != null)
         {
-            // Eğer kazanma koşulu sağlandıysa, dream %100 (blur = 0, glitch = 0)
+            // Eğer oyun bitti ve kazanma koşulu sağlandıysa, dream %100 (blur = 0, glitch = 0)
             if (isWinCondition)
             {
                 // Dream material'ı %100'e ayarla
@@ -1323,7 +1324,7 @@ public class DreamLogicController : MonoBehaviour
             }
             else
             {
-                // Normal hesaplama devam eder
+                // Normal hesaplama devam eder - Oyun devam ederken her zaman normal hesaplama yapılır
             // ÖNEMLİ: Beyin büyüklüğü faktörü - blur ve glitch hesaplamalarında kullanılacak
             // Beyin shrink değeri: 0 = max büyük, 1 = min küçük
             // Beyin max değilse (shrink > winShrinkThreshold) blur/glitch minimum değerde kalır
