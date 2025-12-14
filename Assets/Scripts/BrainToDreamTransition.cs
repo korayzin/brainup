@@ -50,12 +50,25 @@ public class BrainToDreamTransition : MonoBehaviour
     [Tooltip("Fade rengi")]
     public Color fadeColor = Color.black;
     
+    [Header("Canvas Fade Out")]
+    [Tooltip("Fade out yapılacak Canvas (otomatik bulunur veya manuel atanabilir)")]
+    public Canvas targetCanvas;
+    
+    [Tooltip("Canvas fade out süresi (saniye)")]
+    [Range(0.5f, 3f)]
+    public float canvasFadeOutDuration = 1.5f;
+    
+    [Tooltip("Canvas fade out başlangıç zamanı (kamera hareketinin yüzde kaçında başlasın? 0-1)")]
+    [Range(0f, 1f)]
+    public float canvasFadeStartTime = 0f; // Kamera hareketi başlar başlamaz canvas fade başlar
+    
     // Özel değişkenler
     private Vector3 originalCameraPosition;
     private Quaternion originalCameraRotation;
     private bool isTransitioning = false;
     private GameObject fadeCanvasObject;
     private Canvas fadeCanvas;
+    private CanvasGroup canvasGroup;
     
     void Start()
     {
@@ -97,11 +110,43 @@ public class BrainToDreamTransition : MonoBehaviour
         // Fade UI'ı hazırla
         SetupFadeUI();
         
+        // Canvas'ı bul ve hazırla
+        SetupCanvasFade();
+        
         // Collider kontrolü - OnMouseDown için gerekli
         if (GetComponent<Collider>() == null)
         {
             Debug.LogWarning("BrainToDreamTransition: OnMouseDown çalışması için bu GameObject'te bir Collider bileşeni olmalı!");
         }
+    }
+    
+    /// <summary>
+    /// Canvas fade out için hazırlık yap
+    /// </summary>
+    private void SetupCanvasFade()
+    {
+        // Eğer canvas atanmamışsa, otomatik bul
+        if (targetCanvas == null)
+        {
+            targetCanvas = FindObjectOfType<Canvas>();
+            if (targetCanvas == null)
+            {
+                Debug.LogWarning("BrainToDreamTransition: Canvas bulunamadı! Canvas fade out çalışmayacak.");
+                return;
+            }
+        }
+        
+        // CanvasGroup ekle (eğer yoksa)
+        canvasGroup = targetCanvas.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+        {
+            canvasGroup = targetCanvas.gameObject.AddComponent<CanvasGroup>();
+        }
+        
+        // Başlangıçta canvas görünür olsun
+        canvasGroup.alpha = 1f;
+        canvasGroup.interactable = true;
+        canvasGroup.blocksRaycasts = true;
     }
     
     /// <summary>
@@ -234,11 +279,15 @@ public class BrainToDreamTransition : MonoBehaviour
         float totalFadeTime = fadeStartTimeActual + fadeOutDuration; // Toplam fade süresi
         float sceneTransitionTimeActual = fadeStartTimeActual + (fadeOutDuration * sceneTransitionTime); // Sahne geçiş zamanı
         
+        // Canvas fade out zamanları
+        float canvasFadeStartTimeActual = cameraMoveDuration * canvasFadeStartTime; // Canvas fade başlangıç zamanı
+        float canvasFadeEndTime = canvasFadeStartTimeActual + canvasFadeOutDuration; // Canvas fade bitiş zamanı
+        
         // Sahne geçişi yapıldı mı?
         bool sceneTransitioned = false;
         
         // Toplam animasyon süresi (kamera hareketi ve fade out)
-        float totalAnimationTime = Mathf.Max(cameraMoveDuration, totalFadeTime);
+        float totalAnimationTime = Mathf.Max(cameraMoveDuration, totalFadeTime, canvasFadeEndTime);
         
         while (elapsedTime < totalAnimationTime)
         {
@@ -278,6 +327,32 @@ public class BrainToDreamTransition : MonoBehaviour
                 
                 // Fade out'u uygula
                 fadeImage.color = new Color(fadeColor.r, fadeColor.g, fadeColor.b, fadeAlpha);
+            }
+            
+            // Canvas fade out animasyonu
+            if (canvasGroup != null)
+            {
+                float canvasAlpha = 1f;
+                
+                if (elapsedTime >= canvasFadeStartTimeActual)
+                {
+                    // Canvas fade out başladı
+                    float canvasFadeProgress = (elapsedTime - canvasFadeStartTimeActual) / canvasFadeOutDuration;
+                    canvasFadeProgress = Mathf.Clamp01(canvasFadeProgress);
+                    
+                    // Smooth fade out (1'den 0'a)
+                    canvasAlpha = 1f - canvasFadeProgress;
+                }
+                
+                // Canvas alpha'yı uygula
+                canvasGroup.alpha = canvasAlpha;
+                
+                // Canvas tamamen görünmez olduğunda etkileşimi kapat
+                if (canvasAlpha <= 0f)
+                {
+                    canvasGroup.interactable = false;
+                    canvasGroup.blocksRaycasts = false;
+                }
             }
             
             // Sahne geçişi (fade out sırasında, delay olmadan)
