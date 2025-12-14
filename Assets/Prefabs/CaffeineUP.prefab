@@ -67,15 +67,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: caffeine up!
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: f88c521999718c048a4312fd8d2c3509, type: 2}
-  m_sharedMaterial: {fileID: 2078033440569382722, guid: f88c521999718c048a4312fd8d2c3509, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: cea45feefd97af045844c9c87c57f585, type: 2}
+  m_sharedMaterial: {fileID: 7159194992286343197, guid: cea45feefd97af045844c9c87c57f585, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294901893
-  m_fontColor: {r: 0.52251816, g: 0, b: 1, a: 1}
+    rgba: 4294967295
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -98,7 +98,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 1
+  m_fontStyle: 0
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535

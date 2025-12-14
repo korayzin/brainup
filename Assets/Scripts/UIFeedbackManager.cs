@@ -57,6 +57,16 @@ public class UIFeedbackManager : MonoBehaviour
     [Tooltip("Eğer buton 3D dünyada ise, bu offset ile ekran pozisyonuna çevrilir")]
     public Vector3 worldToScreenOffset = Vector3.zero;
     
+    [Header("Beyin Mesh Referansı")]
+    [Tooltip("Beyin mesh Transform (otomatik bulunur, feedback beynin yanından çıkar)")]
+    public Transform brainMeshTransform;
+    
+    [Tooltip("Feedback'in beynin yanından çıkması için offset (world space)")]
+    public Vector3 brainOffset = new Vector3(0.5f, 0f, 0f); // Beynin sağından
+    
+    [Tooltip("Beyin mesh'ini kullan (buton pozisyonu yerine)")]
+    public bool useBrainPosition = true;
+    
     private Camera mainCamera;
     private RectTransform canvasRect;
     
@@ -87,6 +97,41 @@ public class UIFeedbackManager : MonoBehaviour
             canvasRect = targetCanvas.GetComponent<RectTransform>();
         }
         
+        // Beyin mesh'ini bul (eğer atanmamışsa)
+        if (brainMeshTransform == null && useBrainPosition)
+        {
+            // DreamLogicController'dan brainRenderer'ı al
+            DreamLogicController dreamLogic = FindObjectOfType<DreamLogicController>();
+            if (dreamLogic != null)
+            {
+                var brainRendererField = typeof(DreamLogicController).GetField("brainRenderer", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                
+                if (brainRendererField != null)
+                {
+                    Renderer brainRenderer = brainRendererField.GetValue(dreamLogic) as Renderer;
+                    if (brainRenderer != null)
+                    {
+                        brainMeshTransform = brainRenderer.transform;
+                    }
+                }
+            }
+            
+            // Eğer hala bulunamadıysa, sahnede "Brain" isimli objeyi ara
+            if (brainMeshTransform == null)
+            {
+                GameObject brainObj = GameObject.Find("Brain");
+                if (brainObj == null)
+                {
+                    brainObj = GameObject.FindGameObjectWithTag("Brain");
+                }
+                if (brainObj != null)
+                {
+                    brainMeshTransform = brainObj.transform;
+                }
+            }
+        }
+        
         // If no prefab assigned, create a default one
         if (feedbackTextPrefab == null)
         {
@@ -99,8 +144,31 @@ public class UIFeedbackManager : MonoBehaviour
     /// </summary>
     public void ShowFeedback(ButtonManager.ButtonType buttonType, Vector3 worldPosition)
     {
+        // Eğer beyin pozisyonu kullanılacaksa, buton pozisyonu yerine beyin pozisyonunu kullan
+        Vector3 feedbackWorldPosition = worldPosition;
+        
+        if (useBrainPosition && brainMeshTransform != null)
+        {
+            // Beyin mesh'inin pozisyonunu al ve offset uygula
+            Vector3 brainPos = brainMeshTransform.position;
+            
+            // Beyin mesh'inin bounds'ını al (daha doğru pozisyon için)
+            Renderer brainRenderer = brainMeshTransform.GetComponent<Renderer>();
+            if (brainRenderer != null)
+            {
+                Bounds bounds = brainRenderer.bounds;
+                // Beynin sağ tarafından çık (veya offset'e göre)
+                feedbackWorldPosition = bounds.center + brainMeshTransform.TransformDirection(brainOffset);
+            }
+            else
+            {
+                // Renderer yoksa transform pozisyonunu kullan
+                feedbackWorldPosition = brainPos + brainMeshTransform.TransformDirection(brainOffset);
+            }
+        }
+        
         // Convert world position to screen position
-        Vector2 screenPosition = WorldToScreenPosition(worldPosition);
+        Vector2 screenPosition = WorldToScreenPosition(feedbackWorldPosition);
         ShowFeedback(buttonType, screenPosition);
     }
     

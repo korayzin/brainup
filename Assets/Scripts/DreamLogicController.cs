@@ -124,6 +124,11 @@ public class DreamLogicController : MonoBehaviour
     private bool gameWon = false;
     private ButtonManager.ButtonType lastPressedButton; // Son basılan buton
     private bool hasAnyButtonBeenPressed = false; // Hiç buton basıldı mı? (ilk basış kontrolü için)
+    
+    // BEHAVIOR-DRIVEN SYSTEM: Batch/Sequence tracking
+    private System.Collections.Generic.List<ButtonManager.ButtonType> currentBatch = new System.Collections.Generic.List<ButtonManager.ButtonType>(); // Mevcut batch
+    private const int BATCH_SIZE = 5; // Her batch'te maksimum 5 farklı element
+    private System.Collections.Generic.List<System.Collections.Generic.List<ButtonManager.ButtonType>> batchHistory = new System.Collections.Generic.List<System.Collections.Generic.List<ButtonManager.ButtonType>>(); // Batch geçmişi
 
     // Material property ID'leri (performans için)
     // DREAM MATERIAL PROPERTIES
@@ -241,6 +246,10 @@ public class DreamLogicController : MonoBehaviour
         gameEnded = false;
         gameWon = false;
         
+        // BEHAVIOR-DRIVEN: Batch'leri temizle
+        currentBatch.Clear();
+        batchHistory.Clear();
+        
         // Win/Lose ekranlarını gizle
         if (winLoseScreenManager != null)
         {
@@ -357,10 +366,67 @@ public class DreamLogicController : MonoBehaviour
         // Son basılan butonu kaydet
         lastPressedButton = buttonType;
         
-        Debug.Log($"Buton basıldı: {buttonType}");
+        // BEHAVIOR-DRIVEN: Batch'e ekle
+        if (!currentBatch.Contains(buttonType))
+        {
+            currentBatch.Add(buttonType);
+        }
+        
+        // Eğer batch dolduysa (5 farklı element) veya tüm butonlar kullanıldıysa, batch'i işle
+        if (currentBatch.Count >= BATCH_SIZE || AreAllButtonsUsed())
+        {
+            ProcessBatch();
+            currentBatch.Clear();
+        }
+        
+        Debug.Log($"Buton basıldı: {buttonType}, Batch size: {currentBatch.Count}");
         
         // Buton basıldıktan sonra oyun bitiş kontrolü yap (buton durumu değişmiş olabilir)
         CheckGameEnd();
+    }
+    
+    /// <summary>
+    /// Tüm butonlar kullanıldı mı kontrol et
+    /// </summary>
+    private bool AreAllButtonsUsed()
+    {
+        if (allButtons == null || allButtons.Length == 0)
+            return false;
+        
+        int usedCount = 0;
+        foreach (var button in allButtons)
+        {
+            if (button != null && (button.buttonType == ButtonManager.ButtonType.Caffeine ||
+                button.buttonType == ButtonManager.ButtonType.Radiation ||
+                button.buttonType == ButtonManager.ButtonType.Lavender ||
+                button.buttonType == ButtonManager.ButtonType.Heat ||
+                button.buttonType == ButtonManager.ButtonType.Melatonin))
+            {
+                if (button.IsButtonUsed())
+                    usedCount++;
+            }
+        }
+        
+        return usedCount >= 5;
+    }
+    
+    /// <summary>
+    /// BEHAVIOR-DRIVEN: Batch'i işle ve kombinasyon efektlerini uygula
+    /// </summary>
+    private void ProcessBatch()
+    {
+        if (currentBatch.Count == 0)
+            return;
+        
+        Debug.Log($"=== PROCESSING BATCH ===");
+        Debug.Log($"Batch elements: {string.Join(" → ", currentBatch)}");
+        
+        // Batch'i geçmişe ekle
+        var batchCopy = new System.Collections.Generic.List<ButtonManager.ButtonType>(currentBatch);
+        batchHistory.Add(batchCopy);
+        
+        // Kombinasyon efektlerini hesapla ve uygula
+        ApplyBehaviorDrivenEffects(currentBatch);
     }
     
     /// <summary>
@@ -382,7 +448,7 @@ public class DreamLogicController : MonoBehaviour
     /// <summary>
     /// Tüm butonlar bitti mi kontrol et
     /// </summary>
-    private void CheckGameEnd()
+    public void CheckGameEnd()
     {
         if (gameEnded)
             return;
@@ -727,7 +793,107 @@ public class DreamLogicController : MonoBehaviour
     }
 
     /// <summary>
+    /// BEHAVIOR-DRIVEN: Batch'teki kombinasyonlara göre efektleri uygula
+    /// </summary>
+    private void ApplyBehaviorDrivenEffects(System.Collections.Generic.List<ButtonManager.ButtonType> batch)
+    {
+        if (batch == null || batch.Count == 0)
+            return;
+        
+        // Element varlığını kontrol et
+        bool hasCaffeine = batch.Contains(ButtonManager.ButtonType.Caffeine);
+        bool hasLavender = batch.Contains(ButtonManager.ButtonType.Lavender);
+        bool hasRadiation = batch.Contains(ButtonManager.ButtonType.Radiation);
+        bool hasHeat = batch.Contains(ButtonManager.ButtonType.Heat);
+        bool hasMelatonin = batch.Contains(ButtonManager.ButtonType.Melatonin);
+        
+        int elementCount = batch.Count;
+        
+        // ÖNCE ÖZEL KOMBİNASYONLARI KONTROL ET (Priority: Trio > Duo > Individual)
+        
+        // === TERNARY INTERACTIONS (3 Elements) ===
+        
+        // Overdrive: Caffeine + Radiation + Heat
+        if (hasCaffeine && hasRadiation && hasHeat && elementCount == 3)
+        {
+            Debug.Log("🔥 OVERDRIVE DETECTED: Caffeine + Radiation + Heat - Stats diverge rapidly!");
+            // Force stats to diverge: Brain shrinks fast, Clarity spikes hard
+            // Ignore safety clamps for this combo
+            Arousal = Mathf.Clamp01(Arousal + 0.5f);
+            Fragmentation = Mathf.Clamp01(Fragmentation + 0.4f);
+            ThermalStress = Mathf.Clamp01(ThermalStress + 0.6f);
+            Clarity = Mathf.Clamp01(Clarity + 0.3f); // Clarity spikes
+            Chaos = Mathf.Clamp01(Chaos + 0.5f);
+            return; // Override other effects
+        }
+        
+        // Equilibrium: Lavender + Melatonin + Heat ("Spa" effect)
+        if (hasLavender && hasMelatonin && hasHeat && elementCount == 3)
+        {
+            Debug.Log("🧘 EQUILIBRIUM DETECTED: Lavender + Melatonin + Heat - Normalization!");
+            // Normalization: Pull both stats closer to 100% balance
+            float targetBalance = 0.8f; // Ideal balance point
+            Arousal = Mathf.Lerp(Arousal, targetBalance, 0.3f);
+            Relaxation = Mathf.Lerp(Relaxation, targetBalance, 0.3f);
+            Fragmentation = Mathf.Lerp(Fragmentation, 1f - targetBalance, 0.3f);
+            ThermalStress = Mathf.Lerp(ThermalStress, 1f - targetBalance, 0.3f);
+            Clarity = Mathf.Lerp(Clarity, targetBalance, 0.4f);
+            Chaos = Mathf.Lerp(Chaos, 1f - targetBalance, 0.4f);
+            return; // Override other effects
+        }
+        
+        // === BINARY INTERACTIONS (2 Elements) ===
+        
+        // Antagonistic: Caffeine + Melatonin (conflict - dampening effect)
+        if (hasCaffeine && hasMelatonin && elementCount == 2)
+        {
+            Debug.Log("⚔️ ANTAGONISTIC DETECTED: Caffeine + Melatonin - Dampening effect!");
+            // Reduce effectiveness of both by 40%
+            float dampeningFactor = 0.6f; // 40% reduction
+            caffeineSmell *= dampeningFactor;
+            melatonin *= dampeningFactor;
+        }
+        
+        // Soothing Synergy: Lavender + Heat
+        if (hasLavender && hasHeat && elementCount == 2)
+        {
+            Debug.Log("🌸 SOOTHING SYNERGY: Lavender + Heat - Brain Size regeneration boost!");
+            // Positive multiplier to Brain Size regeneration
+            Relaxation = Mathf.Clamp01(Relaxation + 0.25f);
+            Fragmentation = Mathf.Clamp01(Fragmentation - 0.20f);
+        }
+        
+        // Volatile Reaction: Radiation + Heat
+        if (hasRadiation && hasHeat && elementCount == 2)
+        {
+            Debug.Log("💥 VOLATILE REACTION: Radiation + Heat - Extreme multipliers!");
+            // Extreme multiplier to Brain Size growth (risk of explosion)
+            // Severe penalty to Clarity
+            Fragmentation = Mathf.Clamp01(Fragmentation + 0.35f); // Brain swells
+            Clarity = Mathf.Clamp01(Clarity - 0.40f); // Clarity crashes
+            Chaos = Mathf.Clamp01(Chaos + 0.50f);
+        }
+        
+        // === COMPLEX CHAINS (4-5 Elements) ===
+        
+        // Entropy: 4 or 5 distinct inputs (unpredictable)
+        if (elementCount >= 4)
+        {
+            Debug.Log($"🌀 ENTROPY DETECTED: {elementCount} distinct inputs - Randomization variance!");
+            // Apply randomization variance to final output
+            float variance = Random.Range(-0.15f, 0.15f);
+            Arousal = Mathf.Clamp01(Arousal + variance);
+            Relaxation = Mathf.Clamp01(Relaxation + variance);
+            Fragmentation = Mathf.Clamp01(Fragmentation + variance);
+            ThermalStress = Mathf.Clamp01(ThermalStress + variance);
+            Clarity = Mathf.Clamp01(Clarity + variance);
+            Chaos = Mathf.Clamp01(Chaos + variance);
+        }
+    }
+    
+    /// <summary>
     /// Input'lardan latent state'leri hesapla (Arousal, Relaxation, ThermalStress, Fragmentation)
+    /// BEHAVIOR-DRIVEN: Element characteristics applied
     /// </summary>
     private void CalculateLatentStates()
     {
@@ -737,46 +903,40 @@ public class DreamLogicController : MonoBehaviour
         float targetThermalStress = 0f;
         float targetFragmentation = 0f;
         
-        // KAFEIN kuralları:
-        // - Beyni büyütür AMA glitch artırır (anksiyetik etki - trade-off)
-        // - Netliği biraz artırır ama tek başına yeterli değil
-        targetArousal += 0.80f * caffeineSmell; // Yüksek uyarılma (beyin aktivitesi artar)
-        targetFragmentation -= 0.15f * caffeineSmell; // Parçalanma azalır (beyin sağlığı artar - ama daha az)
-        targetRelaxation -= 0.30f * caffeineSmell; // Rahatlama azalır (uyarıcı etki - glitch artırır)
-        targetThermalStress += 0.10f * caffeineSmell; // Hafif stres (anksiyetik etki)
+        // CAFFEINE: Stimulant - Boosts Clarity but stresses Brain (shrinking it)
+        // BEHAVIOR: Acts as a Stimulant. It boosts Clarity but stresses the Brain (shrinking it).
+        targetArousal += 0.80f * caffeineSmell; // High stimulation (brain activity increases)
+        targetFragmentation += 0.20f * caffeineSmell; // Brain stressed (shrinking) - BEHAVIOR: stresses Brain
+        targetRelaxation -= 0.30f * caffeineSmell; // Relaxation decreases (stimulant effect)
+        targetThermalStress += 0.10f * caffeineSmell; // Mild stress (anxiety effect)
         
-        // RADYASYON (EMF) kuralları:
-        // - Beyni aşırı derecede küçültür, netliği bozar
-        targetFragmentation += 0.85f * emf; // Çok yüksek parçalanma (beyin sağlığını aşırı bozar)
-        targetArousal += 0.15f * emf; // Hafif uyarılma
-        targetThermalStress += 0.40f * emf; // Yüksek hücresel stres
-        targetRelaxation -= 0.50f * emf; // Rahatlama çok azalır
+        // RADIATION: Mutator - Causes rapid, unhealthy growth (swelling) of Brain Size but drastically corrupts Clarity
+        // BEHAVIOR: Acts as a Mutator. It causes rapid, unhealthy growth (swelling) of the Brain Size but drastically corrupts Clarity (noise/static).
+        targetFragmentation -= 0.30f * emf; // Brain swells (unhealthy growth) - BEHAVIOR: rapid growth
+        targetArousal += 0.15f * emf; // Mild stimulation
+        targetThermalStress += 0.40f * emf; // High cellular stress
+        targetRelaxation -= 0.50f * emf; // Relaxation decreases significantly
         
-        // LAVANTA kuralları:
-        // - Beyni büyütür, netliği biraz artırır
-        targetRelaxation += 0.70f * lavenderSmell; // Yüksek rahatlama
-        targetFragmentation -= 0.40f * lavenderSmell; // Parçalanma azalır (beyin sağlığı artar)
-        targetArousal -= 0.15f * lavenderSmell; // Uyarılma azalır
-        targetThermalStress -= 0.20f * lavenderSmell; // Stres azalır
+        // LAVENDER: Stabilizer - Provides minor healing and soothing effects to both stats
+        // BEHAVIOR: Acts as a Stabilizer. It provides minor healing and soothing effects to both stats.
+        targetRelaxation += 0.70f * lavenderSmell; // High relaxation (soothing)
+        targetFragmentation -= 0.25f * lavenderSmell; // Minor healing (brain health improves slightly)
+        targetArousal -= 0.15f * lavenderSmell; // Stimulation decreases
+        targetThermalStress -= 0.20f * lavenderSmell; // Stress decreases
         
-        // ISI (Warm Air) kuralları:
-        // - Beyni küçültür (olumsuz etki)
-        // - Rüya görünümü bozulur (olumsuz etki)
-        // - Yüksek ısı uyku kalitesini bozar, beyin sağlığını olumsuz etkiler
-        targetThermalStress += 0.60f * warmAir; // Yüksek termal stres (olumsuz)
-        targetArousal -= 0.10f * warmAir; // Uyarılma azalır (uyku kalitesi bozulur)
-        targetRelaxation -= 0.40f * warmAir; // Rahatlama azalır (uyku kalitesi bozulur - olumsuz)
-        targetFragmentation += 0.50f * warmAir; // Parçalanma artar (beyin sağlığı bozulur - olumsuz)
+        // HEAT: Catalyst/Stressor - By itself, it drains stats due to discomfort. However, it amplifies specific reactions when paired with other elements.
+        // BEHAVIOR: Acts as a Catalyst/Stressor. By itself, it drains stats due to discomfort. However, it amplifies specific reactions when paired with other elements.
+        targetThermalStress += 0.60f * warmAir; // High thermal stress (drains stats)
+        targetArousal -= 0.10f * warmAir; // Stimulation decreases (sleep quality degrades)
+        targetRelaxation -= 0.40f * warmAir; // Relaxation decreases (discomfort)
+        targetFragmentation += 0.30f * warmAir; // Brain stressed (drains stats) - but amplifies when paired
         
-        // MELATONIN kuralları:
-        // - Beyni büyütür (iyileştirici etki)
-        // - Rüya kalitesini iyileştirir (netlik ve tutarlılık artar)
-        // - Derin uyku sağlar, beyin sağlığını artırır
-        // - Kombinasyonlarda daha da güçlenir
-        targetRelaxation += 0.50f * melatonin; // Yüksek rahatlama (derin uyku)
-        targetFragmentation -= 0.35f * melatonin; // Parçalanma azalır (beyin sağlığı artar)
-        targetArousal -= 0.10f * melatonin; // Uyarılma hafif azalır (derin uyku - ama beyin büyümesini engellemez)
-        targetThermalStress -= 0.25f * melatonin; // Stres azaltma (iyileştirici)
+        // MELATONIN: Sedative - High boost to Clarity (rest), but relaxes Brain Size (shrinking/slowing)
+        // BEHAVIOR: Acts as a Sedative. High boost to Clarity (rest), but relaxes Brain Size (shrinking/slowing).
+        targetRelaxation += 0.50f * melatonin; // High relaxation (deep sleep)
+        targetFragmentation += 0.15f * melatonin; // Brain relaxes (shrinking/slowing) - BEHAVIOR: relaxes Brain Size
+        targetArousal -= 0.10f * melatonin; // Stimulation decreases (deep sleep)
+        targetThermalStress -= 0.25f * melatonin; // Stress reduction (healing)
         
         // Clamp to 0..1
         targetArousal = Mathf.Clamp01(targetArousal);
@@ -801,12 +961,13 @@ public class DreamLogicController : MonoBehaviour
     private void CalculateDerivedStates()
     {
         // Clarity (Rüya Netliği): 
-        // - Kafein biraz artırır (ama glitch artırır - trade-off)
-        // - Lavanta biraz artırır (netlik biraz artar)
-        // - Melatonin artırır (derin uyku netliği iyileştirir)
-        // - Radyasyon azaltır (netliği bozar)
-        // - Isı azaltır (yüksek ısı uyku kalitesini bozar, netliği düşürür - olumsuz)
-        float targetClarity = 0.30f * Arousal + 0.35f * Relaxation + 0.30f * melatonin - 0.80f * Fragmentation - 0.20f * ThermalStress - 0.30f * warmAir + 0.15f; // Melatonin netliği artırır
+        // BEHAVIOR-DRIVEN: Caffeine boosts Clarity, Melatonin high boost to Clarity, Radiation corrupts Clarity
+        // - Caffeine: Boosts Clarity (stimulant effect)
+        // - Lavender: Minor boost (stabilizer)
+        // - Melatonin: High boost (sedative - rest)
+        // - Radiation: Drastically corrupts Clarity (noise/static)
+        // - Heat: Drains Clarity (discomfort)
+        float targetClarity = 0.40f * Arousal + 0.35f * Relaxation + 0.50f * melatonin - 0.90f * Fragmentation - 0.20f * ThermalStress - 0.30f * warmAir + 0.15f; // Caffeine and Melatonin boost Clarity
         targetClarity = Mathf.Clamp01(targetClarity);
         
         // Vividness (Canlılık):
@@ -817,12 +978,13 @@ public class DreamLogicController : MonoBehaviour
         targetVividness = Mathf.Clamp01(targetVividness);
         
         // Chaos (Glitch/Anksiyete):
-        // - Kafein artırır (anksiyetik - trade-off: beyin büyütür ama glitch artırır)
-        // - Radyasyon artırır (yüksek parçalanma)
-        // - Lavanta azaltır (rahatlama)
-        // - Melatonin azaltır (derin uyku glitch'i azaltır)
-        // - Isı orta seviyede
-        float targetChaos = 0.60f * Fragmentation + 0.40f * ThermalStress + 0.60f * Arousal - 0.50f * Relaxation - 0.50f * melatonin; // Melatonin glitch'i daha fazla azaltır
+        // BEHAVIOR-DRIVEN: Caffeine stresses Brain (glitch), Radiation corrupts Clarity (noise), Melatonin reduces chaos
+        // - Caffeine: Increases (stimulant - anxiety)
+        // - Radiation: Increases (corrupts Clarity - noise/static)
+        // - Lavender: Decreases (stabilizer - soothing)
+        // - Melatonin: Decreases (sedative - deep sleep)
+        // - Heat: Increases (stressor - discomfort)
+        float targetChaos = 0.60f * Fragmentation + 0.40f * ThermalStress + 0.50f * Arousal - 0.50f * Relaxation - 0.60f * melatonin; // Melatonin reduces chaos more
         targetChaos = Mathf.Clamp01(targetChaos);
         
         // Smooth geçişler
@@ -847,79 +1009,86 @@ public class DreamLogicController : MonoBehaviour
         if (warmAir > 0.5f) activeButtonCount++;
         if (melatonin > 0.5f) activeButtonCount++;
         
-        // Kombinasyon bonusu: İkili kombinasyonlar güçlü sinerji yaratır
+        // Kombinasyon bonusu: 4 FARKLI ÇÖZÜM YOLU (HEPSİ 15 BASIM - TÜM BUTONLAR)
+        // YOL 1: Kafein → Lavanta → Melatonin → Radyasyon → Isı
+        // YOL 2: Lavanta → Melatonin → Kafein → Radyasyon → Isı
+        // YOL 3: Melatonin → Lavanta → Radyasyon → Kafein → Isı
+        // YOL 4: Radyasyon → Lavanta → Melatonin → Kafein → Isı
+        // NOT: Tüm yollar 15 basım (5 buton × 3 basım) ile kazanmayı sağlar
         combinationBonus = 0f;
         
-            // İkili kombinasyonlar (güçlü sinerji)
-            if (activeButtonCount >= 2)
-            {
-                // Kafein + Lavanta: Optimal sinerji (Flow State) - Kafein'in glitch etkisini Lavanta dengeler
-                if (caffeineSmell > 0.5f && lavenderSmell > 0.5f)
-                    combinationBonus += 0.35f; // İyi sinerji (güçlendirildi)
-                
-                // Kafein + Lavanta + Melatonin: MÜKEMMEL SİNERJİ (Optimal Çözüm)
-                // Bu kombinasyon tüm hedeflere ulaştırır: Shrink 0.350'e kadar, Blur 0, Glitch 0
-                if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f)
-                    combinationBonus += 0.50f; // Güçlü sinerji (güçlendirildi)
-                
-                // Melatonin + Lavanta: Derin uyku + rahatlama (iyi kombinasyon)
-                if (melatonin > 0.5f && lavenderSmell > 0.5f)
-                    combinationBonus += 0.30f; // Orta seviye sinerji (güçlendirildi)
-                
-                // Melatonin + Kafein: İlginç sinerji (uyarı + derin uyku dengesi)
-                // Kafein'in glitch etkisini Melatonin dengeler
-                if (melatonin > 0.5f && caffeineSmell > 0.5f)
-                    combinationBonus += 0.30f; // İyi sinerji (güçlendirildi)
+        // İkili kombinasyonlar (tüm yollar için gerekli)
+        if (activeButtonCount >= 2)
+        {
+            // Kafein + Lavanta: Güçlü sinerji (YOL 1 ve YOL 2 için)
+            if (caffeineSmell > 0.5f && lavenderSmell > 0.5f)
+                combinationBonus += 0.30f;
             
+            // Melatonin + Lavanta: Derin uyku + rahatlama (YOL 2 ve YOL 3 için)
+            if (melatonin > 0.5f && lavenderSmell > 0.5f)
+                combinationBonus += 0.30f;
+            
+            // Melatonin + Kafein: İlginç sinerji (YOL 1 ve YOL 4 için)
+            if (melatonin > 0.5f && caffeineSmell > 0.5f)
+                combinationBonus += 0.25f;
+            
+            // Lavanta + Radyasyon: Lavanta radyasyonun zararını azaltır (YOL 3 ve YOL 4 için)
+            if (lavenderSmell > 0.5f && emf > 0.5f)
+                combinationBonus += 0.35f;
+            
+            // Melatonin + Radyasyon: Melatonin radyasyonun zararını azaltır (YOL 3 ve YOL 4 için)
+            if (melatonin > 0.5f && emf > 0.5f)
+                combinationBonus += 0.30f;
+            
+            // Zararlı kombinasyonlar (dengelemek için)
             // Kafein + Isı: Zararlı kombinasyon (yüksek ısı + uyarılma = stres)
             if (caffeineSmell > 0.5f && warmAir > 0.5f)
-                combinationBonus -= 0.15f; // Negatif bonus (olumsuz)
+                combinationBonus -= 0.10f; // Negatif bonus (olumsuz ama dengelenebilir)
             
-            // Lavanta + Isı: Lavanta ısının zararını biraz azaltır ama yine de olumsuz
+            // Lavanta + Isı: Lavanta ısının zararını biraz azaltır
             if (lavenderSmell > 0.5f && warmAir > 0.5f)
-                combinationBonus -= 0.05f; // Hafif negatif (lavanta koruyucu ama yeterli değil)
+                combinationBonus -= 0.05f; // Hafif negatif (lavanta koruyucu)
             
-            // Kafein + Radyasyon: ÇOK ZARARLI (cezalandırıcı kombinasyon)
-            // Bu kombinasyon oyunu kaybettirir - yanlış strateji
+            // Kafein + Radyasyon: ÇOK ZARARLI (cezalandırıcı kombinasyon - YOL 1 ve YOL 2'de dikkat)
             if (caffeineSmell > 0.5f && emf > 0.5f)
-                combinationBonus -= 0.20f; // NEGATİF BONUS (cezalandırıcı)
-            
-            // Lavanta + Radyasyon: Lavanta radyasyonun zararını azaltır (koruyucu etki)
-            if (lavenderSmell > 0.5f && emf > 0.5f)
-                combinationBonus += 0.35f; // Lavanta koruyucu etki (artırıldı)
-            
-            // Melatonin + Radyasyon: Melatonin radyasyonun zararını azaltır
-            if (melatonin > 0.5f && emf > 0.5f)
-                combinationBonus += 0.30f; // Melatonin koruyucu etki (artırıldı)
-            
-            // Kafein + Lavanta + Melatonin + Radyasyon: Güçlü sinerji (tüm butonlar kullanıldığında)
-            // Bu kombinasyon tüm butonlara basmak zorunda kalındığında kazanmayı sağlar
-            if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f && emf > 0.5f)
-                combinationBonus += 0.60f; // Ekstra sinerji (tüm butonlar birlikte - güçlendirildi)
-            
-            // Kafein + Lavanta + Melatonin + Radyasyon + Isı: TÜM BUTONLAR (Maksimum Sinerji)
-            // Bu, tüm butonlara 3'er kere basıldığında kazanmayı sağlayan optimal kombinasyon
-            // Isı olumsuz ama diğer butonların gücü ısının zararını dengeler
-            if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f && emf > 0.5f && warmAir > 0.5f)
-                combinationBonus += 0.50f; // Maksimum sinerji (tüm butonlar birlikte - güçlendirildi)
+                combinationBonus -= 0.15f; // NEGATİF BONUS (ama diğer kombinasyonlarla dengelenebilir)
         }
         
-        // Üçlü kombinasyonlar (güçlü sinerji)
+        // Üçlü kombinasyonlar (tüm yollar için gerekli)
         if (activeButtonCount >= 3)
         {
-            combinationBonus += 0.25f; // Ekstra bonus (güçlendirildi)
+            // Kafein + Lavanta + Melatonin: MÜKEMMEL SİNERJİ (YOL 1 ve YOL 2 için)
+            if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f)
+                combinationBonus += 0.40f;
+            
+            // Melatonin + Lavanta + Radyasyon: Güçlü koruyucu sinerji (YOL 3 için)
+            if (melatonin > 0.5f && lavenderSmell > 0.5f && emf > 0.5f)
+                combinationBonus += 0.35f;
+            
+            // Genel üçlü kombinasyon bonusu
+            combinationBonus += 0.15f;
         }
         
-        // Dörtlü kombinasyon (maksimum sinerji)
+        // Dörtlü kombinasyon (tüm yollar için gerekli)
         if (activeButtonCount >= 4)
         {
-            combinationBonus += 0.30f; // Ekstra bonus (güçlendirildi)
+            // Kafein + Lavanta + Melatonin + Radyasyon: Güçlü sinerji (YOL 1, YOL 2, YOL 3 için)
+            if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f && emf > 0.5f)
+                combinationBonus += 0.35f;
+            
+            // Genel dörtlü kombinasyon bonusu
+            combinationBonus += 0.20f;
         }
         
-        // Beşli kombinasyon (tüm butonlar - maksimum sinerji)
-        if (activeButtonCount >= 5)
+        // Beşli kombinasyon (TÜM BUTONLAR - tüm yollar için maksimum)
+        if (activeButtonCount == 5)
         {
-            combinationBonus += 0.35f; // Ekstra bonus (tüm butonlar birlikte)
+            // Tüm butonlar aktif: Maksimum sinerji (tüm yollar için)
+            if (caffeineSmell > 0.5f && lavenderSmell > 0.5f && melatonin > 0.5f && emf > 0.5f && warmAir > 0.5f)
+                combinationBonus += 0.40f; // Maksimum sinerji (ısının zararı diğer butonlarla dengelenir)
+            
+            // Genel beşli kombinasyon bonusu
+            combinationBonus += 0.25f;
         }
         
         // Clamp combination bonus (negatif olabilir - cezalandırıcı kombinasyonlar için)
@@ -931,6 +1100,9 @@ public class DreamLogicController : MonoBehaviour
     /// </summary>
     private void UpdateMaterialProperties()
     {
+        // ÖNEMLİ: Eğer shrink değeri 0.190'dan küçük veya eşitse, brain ve dream %100 olmalı
+        bool isWinCondition = currentShrinkAmount <= 0.190f;
+        
         // Kombinasyon bonusunu hesapla
         int activeButtonCount;
         float combinationBonus;
@@ -939,6 +1111,29 @@ public class DreamLogicController : MonoBehaviour
         // BRAIN MATERIAL MAPPING
         if (brainRenderer != null && brainPropertyBlock != null && brainMat != null)
         {
+            // Eğer kazanma koşulu sağlandıysa, brain %100 (shrink = 0)
+            if (isWinCondition)
+            {
+                currentShrinkAmount = 0.0f;
+                
+                // Brain material'ı %100'e ayarla
+                if (brainMat.HasProperty(shrinkProgressID))
+                    brainPropertyBlock.SetFloat(shrinkProgressID, 0.0f);
+                
+                // ShrinkScale minimum (beyin büyüdü, derinlik yok)
+                if (brainMat.HasProperty(maxShrinkDepthID))
+                    brainPropertyBlock.SetFloat(maxShrinkDepthID, 0.01f);
+                
+                // MinObjectScale maksimum (beyin tam büyük)
+                if (brainMat.HasProperty(minMeshScaleID))
+                    brainPropertyBlock.SetFloat(minMeshScaleID, 1.0f);
+                
+                // Material property block'ı uygula
+                brainRenderer.SetPropertyBlock(brainPropertyBlock);
+            }
+            else
+            {
+                // Normal hesaplama devam eder
             // ShrinkAmount: Başlangıç 1.0 (maksimum küçük), kombinasyonlarla 0'a yaklaşır
             // StructuralIntegrity hesaplama:
             // - Lavanta: Relaxation artırır, Fragmentation azaltır → StructuralIntegrity artar (beyin büyür)
@@ -964,21 +1159,27 @@ public class DreamLogicController : MonoBehaviour
             radiationDamage *= (1f - protectionFactor); // Koruyucu faktör radyasyon zararını azaltır
             
             // StructuralIntegrity hesaplama: Beyin sağlığı ve büyüme potansiyeli
-            // Shrink değeri 0.900'dan 0.350'e düşmek için StructuralIntegrity ≈ 0.61 olmalı
-            // Bu yüzden butonların etkilerini güçlendirmeliyiz
+            // 4 FARKLI ÇÖZÜM YOLU (HEPSİ 15 BASIM - TÜM BUTONLAR):
+            // YOL 1: Kafein → Lavanta → Melatonin → Radyasyon → Isı
+            // YOL 2: Lavanta → Melatonin → Kafein → Radyasyon → Isı
+            // YOL 3: Melatonin → Lavanta → Radyasyon → Kafein → Isı
+            // YOL 4: Radyasyon → Lavanta → Melatonin → Kafein → Isı
+            // Tüm yollar için StructuralIntegrity ≈ 0.79 olmalı (shrink 0.190'a düşmek için)
+            // Shrink 0.900'dan 0.190'a düşmek için: Lerp(0.900, 0.0, 0.79) ≈ 0.189
             float baseStructuralIntegrity = Mathf.Clamp01(
-                0.40f * Relaxation +      // Lavanta: Beyin sağlığını artırır (güçlendirildi)
-                0.35f * Arousal +        // Kafein: Aktivite artışı beyin büyümesine yardımcı (güçlendirildi)
-                0.20f * Clarity +        // Netlik beyin sağlığını gösterir (güçlendirildi)
-                0.35f * melatonin +      // Melatonin: Beyin sağlığını artırır (güçlendirildi)
-                radiationDamage -        // Radyasyon: Yüksek parçalanma (ama koruyucu faktörlerle azaltılmış)
-                0.40f * ThermalStress -  // Isı: Yüksek termal stres (olumsuz etki)
-                0.25f * warmAir          // Isı: Direkt olumsuz etki (beyin sağlığını bozar)
+                0.42f * Relaxation +      // Lavanta: Beyin sağlığını artırır (tüm yollar için gerekli)
+                0.38f * Arousal +        // Kafein: Aktivite artışı beyin büyümesine yardımcı (tüm yollar için)
+                0.22f * Clarity +        // Netlik beyin sağlığını gösterir (tüm yollar için)
+                0.38f * melatonin +      // Melatonin: Beyin sağlığını artırır (tüm yollar için)
+                radiationDamage -        // Radyasyon: Yüksek parçalanma (ama koruyucu faktörlerle azaltılmış - tüm yollar için)
+                0.35f * ThermalStress -  // Isı: Yüksek termal stres (olumsuz etki - tüm yollar için)
+                0.20f * warmAir          // Isı: Direkt olumsuz etki (beyin sağlığını bozar - tüm yollar için)
             );
             
             // KOMBİNASYON BONUSU: Kombinasyonlar StructuralIntegrity'yi güçlendirir
-            // Kombinasyon bonusunu artırdık (daha güçlü sinerji)
-            float structuralIntegrity = Mathf.Clamp01(baseStructuralIntegrity + combinationBonus * 0.70f);
+            // Tüm yollar 15 basım ile kazanmayı sağlamalı
+            // Kombinasyon bonusu tüm yollar için yeterli olmalı
+            float structuralIntegrity = Mathf.Clamp01(baseStructuralIntegrity + combinationBonus * 0.72f);
             structuralIntegrity = Mathf.Clamp01(structuralIntegrity);
             
             // Hedef shrink değeri: StructuralIntegrity arttıkça başlangıç değerinden 0'a git
@@ -1097,11 +1298,32 @@ public class DreamLogicController : MonoBehaviour
             {
                 brainRenderer.SetPropertyBlock(brainPropertyBlock);
             }
+            }
         }
         
         // DREAM MATERIAL MAPPING
         if (dreamRenderer != null && dreamPropertyBlock != null && dreamMat != null)
         {
+            // Eğer kazanma koşulu sağlandıysa, dream %100 (blur = 0, glitch = 0)
+            if (isWinCondition)
+            {
+                // Dream material'ı %100'e ayarla
+                if (dreamMat.HasProperty(blurAmountID))
+                    dreamPropertyBlock.SetFloat(blurAmountID, 0.0f);
+                
+                if (dreamMat.HasProperty(glitchAmountID))
+                    dreamPropertyBlock.SetFloat(glitchAmountID, 0.0f);
+                
+                // Mevcut değerleri güncelle
+                currentBlurAmount = 0.0f;
+                currentGlitchAmount = 0.0f;
+                
+                // Material property block'ı uygula
+                dreamRenderer.SetPropertyBlock(dreamPropertyBlock);
+            }
+            else
+            {
+                // Normal hesaplama devam eder
             // ÖNEMLİ: Beyin büyüklüğü faktörü - blur ve glitch hesaplamalarında kullanılacak
             // Beyin shrink değeri: 0 = max büyük, 1 = min küçük
             // Beyin max değilse (shrink > winShrinkThreshold) blur/glitch minimum değerde kalır
@@ -1248,6 +1470,7 @@ public class DreamLogicController : MonoBehaviour
                 dreamPropertyBlock.SetColor(rimColorDreamID, rimColor);
             
             dreamRenderer.SetPropertyBlock(dreamPropertyBlock);
+            }
         }
     }
 }

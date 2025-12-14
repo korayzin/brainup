@@ -30,10 +30,10 @@ public class ButtonManager : MonoBehaviour
     public MeshRenderer targetMesh;
     
     [Header("Buton Basma Ayarları")]
-    [Tooltip("Butonun ne kadar aşağı ineceği (birim)")]
+    [Tooltip("Butonun ne kadar aşağı ineceği (birim) - SADECE RESTART BUTONU İÇİN KULLANILIYOR")]
     public float pressDistance = 0.1f;
     
-    [Tooltip("Buton basma/geri dönme süresi (saniye)")]
+    [Tooltip("Buton basma/geri dönme süresi (saniye) - SADECE RESTART BUTONU İÇİN KULLANILIYOR")]
     public float pressDuration = 0.2f;
     
     [Header("Renk Ayarları")]
@@ -53,6 +53,16 @@ public class ButtonManager : MonoBehaviour
     
     [Tooltip("Buton basıldığında gösterilecek mesaj (Inspector'dan özelleştirilebilir, boşsa otomatik ayarlanır)")]
     public string feedbackMessage = "";
+    
+    [Header("Button Press Count UI")]
+    [Tooltip("Butonun üstünde gösterilecek kalan basım hakkı Text (TextMeshProUGUI - Inspector'dan atanabilir)")]
+    public TextMeshProUGUI pressCountText;
+    
+    [Tooltip("Butonun üstünde gösterilecek kalan basım hakkı Text (Unity UI Text - Inspector'dan atanabilir)")]
+    public UnityEngine.UI.Text pressCountTextLegacy;
+    
+    [Tooltip("Butonun üstünde gösterilecek UI Text'in Transform'u (3D dünyada konumlandırma için)")]
+    public Transform pressCountUITransform;
     
     [Header("3D UI Feedback")]
     [Tooltip("3D UI Feedback Manager (otomatik bulunur veya manuel atanabilir)")]
@@ -110,6 +120,9 @@ public class ButtonManager : MonoBehaviour
         remainingPressCount = maxPressCount;
         isButtonUsed = false;
         
+        // UI Text'i başlangıç değeriyle güncelle
+        UpdatePressCountUI();
+        
         // Eğer feedback mesajı boşsa, buton tipine göre otomatik ayarla
         if (string.IsNullOrEmpty(feedbackMessage))
         {
@@ -151,41 +164,47 @@ public class ButtonManager : MonoBehaviour
             return; // Aynı butona üst üste basılamaz
         }
         
-        if (!isPressed && pressCoroutine == null)
+        // BASMA ANİMASYONU KALDIRILDI - Sadece restart butonunda var
+        // Basma hakkını azalt
+        remainingPressCount--;
+        
+        // Buton durumunu aktif et (artık toggle değil, sadece aktif)
+        isButtonActive = true;
+        
+        // UI Text'i güncelle
+        UpdatePressCountUI();
+        
+        // Eğer tüm haklar bittiyse butonu kullanıldı olarak işaretle
+        if (remainingPressCount <= 0)
         {
-            // Basma hakkını azalt
-            remainingPressCount--;
-            
-            // Buton durumunu aktif et (artık toggle değil, sadece aktif)
-            isButtonActive = true;
-            
-            // Eğer tüm haklar bittiyse butonu kullanıldı olarak işaretle
-            if (remainingPressCount <= 0)
-            {
-                isButtonUsed = true;
-                Debug.Log($"Buton {buttonType} kullanıldı! Kalan hak: {remainingPressCount}");
-            }
-            else
-            {
-                Debug.Log($"Buton {buttonType} basıldı. Kalan hak: {remainingPressCount}/{maxPressCount}");
-            }
-            
-            pressCoroutine = StartCoroutine(PressButton());
-            
-            // DreamLogicController'a durumu bildir
-            NotifyDreamLogicController();
-            
-            // UI Feedback göster (2D UI)
-            ShowFeedback();
-            
-            // 3D UI Feedback göster (damage number gibi)
-            Show3DFeedback();
-            
-            // DreamLogicController'a buton basıldığını bildir (oyun kontrolü için)
-            if (dreamLogicController != null)
-            {
-                dreamLogicController.OnButtonPressed(buttonType);
-            }
+            isButtonUsed = true;
+            Debug.Log($"Buton {buttonType} kullanıldı! Kalan hak: {remainingPressCount}");
+        }
+        else
+        {
+            Debug.Log($"Buton {buttonType} basıldı. Kalan hak: {remainingPressCount}/{maxPressCount}");
+        }
+        
+        // Target mesh'in rengini değiştir (buton aktifse)
+        if (targetMesh != null && targetMesh.material != null)
+        {
+            targetMesh.material.color = targetColor; // Aktif olduğunda renk değişir
+        }
+        
+        // DreamLogicController'a durumu bildir
+        NotifyDreamLogicController();
+        
+        // UI Feedback göster (2D UI)
+        ShowFeedback();
+        
+        // 3D UI Feedback göster (damage number gibi)
+        Show3DFeedback();
+        
+        // DreamLogicController'a buton basıldığını bildir (oyun kontrolü için)
+        if (dreamLogicController != null)
+        {
+            dreamLogicController.OnButtonPressed(buttonType);
+            dreamLogicController.CheckGameEnd();
         }
     }
 
@@ -359,13 +378,65 @@ public class ButtonManager : MonoBehaviour
     {
         if (uiFeedbackManager != null)
         {
-            // Butonun pozisyonunu kullan (buttonMesh varsa onu, yoksa transform'u)
+            // UIFeedbackManager artık beynin pozisyonunu kullanıyor
+            // Buton pozisyonu yerine beyin pozisyonu kullanılacak (UIFeedbackManager içinde)
+            // Bu yüzden burada sadece buton pozisyonunu geçiyoruz, ama UIFeedbackManager
+            // useBrainPosition = true ise bunu görmezden gelip beynin pozisyonunu kullanacak
             Vector3 spawnPosition = buttonMesh != null ? buttonMesh.position : transform.position;
             
-            // Butonun üstünde bir offset ile göster
-            spawnPosition += Vector3.up * 0.5f; // Butonun 0.5 birim üstünde
-            
             uiFeedbackManager.ShowFeedback(buttonType, spawnPosition);
+        }
+    }
+    
+    /// <summary>
+    /// Buton basım hakkı UI'ını güncelle
+    /// </summary>
+    private void UpdatePressCountUI()
+    {
+        // Transform referansından TextMeshProUGUI'yi al (eğer atanmamışsa)
+        if (pressCountText == null && pressCountUITransform != null)
+        {
+            pressCountText = pressCountUITransform.GetComponent<TextMeshProUGUI>();
+        }
+        
+        // TextMeshProUGUI kullanılıyorsa
+        if (pressCountText != null)
+        {
+            pressCountText.text = remainingPressCount.ToString();
+            
+            // Eğer haklar bittiyse rengi değiştir (kırmızı)
+            if (remainingPressCount <= 0)
+            {
+                pressCountText.color = new Color(1f, 0.3f, 0.3f, 1f); // Kırmızı
+            }
+            else if (remainingPressCount == 1)
+            {
+                pressCountText.color = new Color(1f, 0.7f, 0.3f, 1f); // Turuncu (son hak)
+            }
+            else
+            {
+                pressCountText.color = Color.white; // Beyaz (normal)
+            }
+        }
+        
+        // Unity UI Text kullanılıyorsa
+        if (pressCountTextLegacy != null)
+        {
+            pressCountTextLegacy.text = remainingPressCount.ToString();
+            
+            // Eğer haklar bittiyse rengi değiştir (kırmızı)
+            if (remainingPressCount <= 0)
+            {
+                pressCountTextLegacy.color = new Color(1f, 0.3f, 0.3f, 1f); // Kırmızı
+            }
+            else if (remainingPressCount == 1)
+            {
+                pressCountTextLegacy.color = new Color(1f, 0.7f, 0.3f, 1f); // Turuncu (son hak)
+            }
+            else
+            {
+                pressCountTextLegacy.color = Color.white; // Beyaz (normal)
+            }
         }
     }
     
@@ -415,6 +486,9 @@ public class ButtonManager : MonoBehaviour
         remainingPressCount = maxPressCount;
         isButtonUsed = false;
         isButtonActive = false;
+        
+        // UI Text'i güncelle
+        UpdatePressCountUI();
         
         // DreamLogicController'a input değerini sıfırla
         if (dreamLogicController != null)
