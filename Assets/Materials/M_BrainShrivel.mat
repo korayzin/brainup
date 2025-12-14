@@ -59,7 +59,7 @@ Material:
     - _RimPower: 3
     - _Samples: 10
     - _ShrinkAmount: 0.9
-    - _ShrinkScale: 0.0256
+    - _ShrinkScale: 0
     - _Smoothness: 0.843
     - _WaveAmplitude: 0.05
     - _WaveFrequency: 2
